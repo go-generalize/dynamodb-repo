@@ -3,6 +3,7 @@ module github.com/go-generalize/dynamodb-repo
 go 1.12
 
 require (
+	cloud.google.com/go/datastore v1.1.0
 	github.com/fatih/structtag v1.2.0
 	github.com/go-utils/cont v0.1.1
 	github.com/go-utils/dedupe v0.2.1
