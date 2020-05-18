@@ -13,5 +13,5 @@ type Name struct {
 	Done     bool      `dynamo:"done"`
 	Count    int       `dynamo:"count"`
 	NameList []string  `dynamo:"nameList"`
-	// TODO Indexes  []string  `dynamo:"indexes"`
+	Indexes  []string  `dynamo:"indexes"`
 }
