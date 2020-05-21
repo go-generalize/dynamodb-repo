@@ -5,6 +5,8 @@ package tests
 import (
 	"context"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
@@ -21,6 +23,17 @@ import (
 func createTable(t *testing.T, schema string) {
 	t.Helper()
 
+	fp, err := ioutil.TempFile("", "*.json")
+
+	if err != nil {
+		t.Fatalf("failed to create json: %+v", err)
+	}
+	io.Copy(
+		fp,
+		strings.NewReader(schema),
+	)
+	fp.Close()
+
 	cmd := exec.Command(
 		"aws",
 		"dynamodb",
@@ -28,7 +41,7 @@ func createTable(t *testing.T, schema string) {
 		"--endpoint-url",
 		"http://localhost:8000",
 		"--cli-input-json",
-		"file:///dev/stdin",
+		"file://"+fp.Name(),
 	)
 
 	cmd.Stdin = strings.NewReader(schema)
