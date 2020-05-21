@@ -15,6 +15,7 @@ import (
 
 	"cloud.google.com/go/datastore"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	task "github.com/go-generalize/dynamodb-repo/testfiles/a"
 	"github.com/guregu/dynamo"
@@ -87,9 +88,10 @@ func initDynamoClient(t *testing.T) *dynamo.DB {
 	ep := os.Getenv("DYNAMODB_LOCAL_ENDPOINT")
 
 	client := dynamo.New(session.New(), &aws.Config{
-		Region:     aws.String("ap-northeast-1"),
-		Endpoint:   aws.String(ep),
-		DisableSSL: aws.Bool(true),
+		Region:      aws.String("ap-northeast-1"),
+		Endpoint:    aws.String(ep),
+		Credentials: credentials.AnonymousCredentials,
+		DisableSSL:  aws.Bool(true),
 	})
 
 	createTable(t, "Name", task.NameSchema)
