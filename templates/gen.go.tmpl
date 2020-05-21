@@ -28,13 +28,13 @@ type {{ .RepositoryInterfaceName }} interface {
 	Update(ctx context.Context, subject *{{ .StructName }}) error
 	ForceUpdate(ctx context.Context, subject *{{ .StructName }}) error
 	Delete(ctx context.Context, subject *{{ .StructName }}) error
-	DeleteBy{{ .HashKeyFieldName }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}) error
+	DeleteBy{{ FuncNameByValue }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ RangeKeyArgCheck }}) error
 	// Multiple
-	GetMulti(ctx context.Context, {{ RangeKeyArgCheckGetMulti }}) ([]*{{ .StructName }}, error)
+	GetMulti(ctx context.Context, {{ RangeKeyArgCheckPairs }}) ([]*{{ .StructName }}, error)
 	InsertMulti(ctx context.Context, subjects []*{{ .StructName }}) error
 	UpdateMulti(ctx context.Context, subjects []*{{ .StructName }}) error
 	DeleteMulti(ctx context.Context, subjects []*{{ .StructName }}) error
-	DeleteMultiBy{{ .HashKeyFieldName }}s(ctx context.Context, {{ .HashKeyValueName }}s []{{ .HashKeyFieldType }}) error
+	DeleteMultiBy{{ FuncNameByValue }}s(ctx context.Context, {{ RangeKeyArgCheckPairs }}) error
 	// List
 	// TODO List(ctx context.Context, req *{{ .StructName }}ListReq) ([]*{{ .StructName }}, error)
 	// misc
@@ -67,7 +67,7 @@ func (repo *{{ .RepositoryStructName }}) GetTableName() string {
 
 // HasArg HasKeyのペアを返す
 func (repo *{{ .RepositoryStructName }}) hashPair(subject *{{ .StructName }}) (string, string) {
-	return "'{{ .HashKeyFieldName }}'", subject.{{ .HashKeyFieldName }}
+	return "'{{ .HashKeyFieldTagName }}'", subject.{{ .HashKeyFieldName }}
 }
 
 {{- if eq .EnableIndexes true }}
@@ -118,7 +118,7 @@ var {{ .StructName }}IndexesConfig = &xian.Config{
 // Get 処理中の {{ .StructName }} の取得処理一切の責任を持ち、これを行う
 func (repo *{{ .RepositoryStructName }}) Get(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ RangeKeyArgCheck }}) (*{{ .StructName }}, error) {
 	subject := new({{ .StructName }})
-	if err := repo.table.Get("'{{ .HashKeyFieldName }}'", {{ .HashKeyValueName }}){{ RangeKeyValueCheck }}.OneWithContext(ctx, &subject); err != nil {
+	if err := repo.table.Get("'{{ .HashKeyFieldName }}'", {{ .HashKeyValueName }}){{ RangeKeyValueCheckForGet }}.OneWithContext(ctx, &subject); err != nil {
 		return nil, err
 	}
 	return subject, nil
@@ -169,17 +169,16 @@ func (repo *{{ .RepositoryStructName }}) ForceUpdate(ctx context.Context, subjec
 
 // Delete 処理中の {{ .StructName }} の削除処理一切の責任を持ち、これを行う
 func (repo *{{ .RepositoryStructName }}) Delete(ctx context.Context, subject *{{ .StructName }}) error {
-	return repo.table.Delete(repo.hashPair(subject)).RunWithContext(ctx)
+	return repo.table.Delete(repo.hashPair(subject)){{ RangeKeyValueCheckForDelete }}.RunWithContext(ctx)
 }
 
 // DeleteBy{{ .HashKeyFieldName }} 処理中の {{ .StructName }} の{{ .HashKeyFieldName }}から削除処理一切の責任を持ち、これを行う
-func (repo *{{ .RepositoryStructName }}) DeleteBy{{ .HashKeyFieldName }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}) error {
-	subject := &{{ .StructName }}{ {{- .HashKeyFieldName }}: {{ .HashKeyValueName }}}
-	return repo.Delete(ctx, subject)
+func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ RangeKeyArgCheck }}) error {
+	return repo.table.Delete("'{{ .HashKeyFieldName }}'", {{ .HashKeyValueName }}){{ RangeKeyValueCheckForDeletePair }}.RunWithContext(ctx)
 }
 
 // GetMulti 処理中の {{ .StructName }} の一括取得処理一切の責任を持ち、これを行う
-func (repo *{{ .RepositoryStructName }}) GetMulti(ctx context.Context, {{ RangeKeyArgCheckGetMulti }}) (subjects []*{{ .StructName }}, err error) {
+func (repo *{{ .RepositoryStructName }}) GetMulti(ctx context.Context, {{ RangeKeyArgCheckPairs }}) (subjects []*{{ .StructName }}, err error) {
 	for {{ RangeKeyForTerms }} {
 		subject, err :=  repo.Get(ctx, {{ RangeKeyForValue }})
 		if err != nil {
@@ -219,17 +218,16 @@ func (repo *{{ .RepositoryStructName }}) UpdateMulti(ctx context.Context, subjec
 func (repo *{{ .RepositoryStructName }}) DeleteMulti(ctx context.Context, subjects []*{{ .StructName }}) error {
 	tx := repo.db.WriteTx()
 	for _, subject := range subjects {
-		tx.Delete(repo.table.Delete(repo.hashPair(subject)))
+		tx.Delete(repo.table.Delete(repo.hashPair(subject)){{ RangeKeyValueCheckForDelete }})
 	}
 	return tx.RunWithContext(ctx)
 }
 
 // DeleteMultiBy{{ .HashKeyFieldName }}s 処理中の {{ .StructName }} の{{ .HashKeyFieldName }}群を元に一括削除処理一切の責任を持ち、これを行う
-func (repo *{{ .RepositoryStructName }}) DeleteMultiBy{{ .HashKeyFieldName }}s(ctx context.Context, {{ .HashKeyValueName }}s []{{ .HashKeyFieldType }}) error {
+func (repo *{{ .RepositoryStructName }}) DeleteMultiBy{{ FuncNameByValue }}s(ctx context.Context, {{ RangeKeyArgCheckPairs }}) error {
 	tx := repo.db.WriteTx()
-	for _, {{ .HashKeyValueName }} := range {{ .HashKeyValueName }}s {
-		subject := &{{ .StructName }}{ {{- .HashKeyFieldName }}: {{ .HashKeyValueName }}}
-		tx.Delete(repo.table.Delete(repo.hashPair(subject)))
+	for {{ RangeKeyForTerms }} {
+		tx.Delete(repo.table.Delete{{ RangeKeyForDeleteMultiByPairs }})
 	}
 	return tx.RunWithContext(ctx)
 }
