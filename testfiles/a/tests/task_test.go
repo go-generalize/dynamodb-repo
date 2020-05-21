@@ -28,7 +28,7 @@ func createTable(t *testing.T, schema string) {
 		"--endpoint-url",
 		"http://localhost:8000",
 		"--cli-input-json",
-		"/dev/stdin",
+		"file:///dev/stdin",
 	)
 
 	cmd.Stdin = strings.NewReader(schema)
