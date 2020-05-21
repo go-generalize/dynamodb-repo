@@ -20,8 +20,30 @@ import (
 	"github.com/guregu/dynamo"
 )
 
-func createTable(t *testing.T, schema string) {
+func createTable(t *testing.T, tableName, schema string) {
 	t.Helper()
+
+	env := append(
+		os.Environ(),
+		"AWS_DEFAULT_REGION=ap-northeast-1",
+		"AWS_ACCESS_KEY_ID=access_key",
+		"AWS_SECRET_ACCESS_KEY=access_secret",
+	)
+
+	cmd := exec.Command(
+		"aws",
+		"dynamodb",
+		"delete-table",
+		"--endpoint-url",
+		"http://localhost:8000",
+		"--table-name",
+		tableName,
+	)
+	cmd.Env = env
+
+	b, _ := cmd.CombinedOutput()
+
+	t.Log("delete table", string(b))
 
 	fp, err := ioutil.TempFile("", "*.json")
 
@@ -36,7 +58,7 @@ func createTable(t *testing.T, schema string) {
 
 	t.Logf("file name: %+v", fp.Name())
 
-	cmd := exec.Command(
+	cmd = exec.Command(
 		"aws",
 		"dynamodb",
 		"create-table",
@@ -45,12 +67,7 @@ func createTable(t *testing.T, schema string) {
 		"--cli-input-json",
 		"file://"+fp.Name(),
 	)
-	cmd.Env = append(
-		os.Environ(),
-		"AWS_DEFAULT_REGION=ap-northeast-1",
-		"AWS_ACCESS_KEY_ID=access_key",
-		"AWS_SECRET_ACCESS_KEY=access_secret",
-	)
+	cmd.Env = env
 
 	output, err := cmd.CombinedOutput()
 
@@ -75,8 +92,8 @@ func initDynamoClient(t *testing.T) *dynamo.DB {
 		DisableSSL: aws.Bool(true),
 	})
 
-	createTable(t, task.NameSchema)
-	createTable(t, task.TaskSchema)
+	createTable(t, "Name", task.NameSchema)
+	createTable(t, "Task", task.TaskSchema)
 
 	return client
 }
