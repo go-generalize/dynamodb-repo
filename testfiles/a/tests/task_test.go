@@ -6,6 +6,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +17,28 @@ import (
 	task "github.com/go-generalize/dynamodb-repo/testfiles/a"
 	"github.com/guregu/dynamo"
 )
+
+func createTable(t *testing.T, schema string) {
+	t.Helper()
+
+	cmd := exec.Command(
+		"aws",
+		"dynamodb",
+		"create-table",
+		"--endpoint-url",
+		"http://localhost:8000",
+		"--cli-input-json",
+		"/dev/stdin",
+	)
+
+	cmd.Stdin = strings.NewReader(schema)
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		t.Fatalf("failed to create table for DynamoDB(%s): %+v", string(output), err)
+	}
+
+}
 
 func initDynamoClient(t *testing.T) *dynamo.DB {
 	t.Helper()
@@ -30,6 +54,9 @@ func initDynamoClient(t *testing.T) *dynamo.DB {
 		Endpoint:   aws.String(ep),
 		DisableSSL: aws.Bool(true),
 	})
+
+	createTable(t, task.NameSchema)
+	createTable(t, task.TaskSchema)
 
 	return client
 }
@@ -193,11 +220,9 @@ func TestDatastoreListTask(t *testing.T) {
 	}
 
 	t.Run("int(1件)", func(t *testing.T) {
-		req := &task.TaskListReq{
-			Count: task.NumericCriteriaBase.Parse(1),
-		}
+		var tasks []*task.Task
 
-		tasks, err := taskRepo.List(ctx, req, nil)
+		err := taskRepo.List("count", 1).AllWithContext(ctx, &tasks)
 		if err != nil {
 			t.Fatalf("%+v", err)
 		}
@@ -208,11 +233,10 @@ func TestDatastoreListTask(t *testing.T) {
 	})
 
 	t.Run("float(1件)", func(t *testing.T) {
-		req := &task.TaskListReq{
-			Proportion: task.NumericCriteriaBase.Parse(1.12345),
-		}
+		var tasks []*task.Task
 
-		tasks, err := taskRepo.List(ctx, req, nil)
+		prop := task.NumericCriteriaBase.Parse(1.12345)
+		err := taskRepo.List("proportion", prop).AllWithContext(ctx, &tasks)
 		if err != nil {
 			t.Fatalf("%+v", err)
 		}
@@ -223,11 +247,9 @@ func TestDatastoreListTask(t *testing.T) {
 	})
 
 	t.Run("bool(10件)", func(t *testing.T) {
-		req := &task.TaskListReq{
-			Done: task.BoolCriteriaTrue,
-		}
+		var tasks []*task.Task
 
-		tasks, err := taskRepo.List(ctx, req, nil)
+		err := taskRepo.List("done", true).AllWithContext(ctx, &tasks)
 		if err != nil {
 			t.Fatalf("%+v", err)
 		}
@@ -238,26 +260,9 @@ func TestDatastoreListTask(t *testing.T) {
 	})
 
 	t.Run("time.Time(10件)", func(t *testing.T) {
-		req := &task.TaskListReq{
-			Created: now,
-		}
+		var tasks []*task.Task
 
-		tasks, err := taskRepo.List(ctx, req, nil)
-		if err != nil {
-			t.Fatalf("%+v", err)
-		}
-
-		if len(tasks) != 10 {
-			t.Fatal("not match")
-		}
-	})
-
-	t.Run("[]string(10件)", func(t *testing.T) {
-		req := &task.TaskListReq{
-			NameList: []string{"a", "b"},
-		}
-
-		tasks, err := taskRepo.List(ctx, req, nil)
+		err := taskRepo.List("created", now).AllWithContext(ctx, &tasks)
 		if err != nil {
 			t.Fatalf("%+v", err)
 		}
@@ -298,18 +303,18 @@ func TestDatastoreListNameWithIndexes(t *testing.T) {
 			PriceList: []int{1, 2, 3, 4, 5},
 		}
 		tks = append(tks, tk)
+		ids = append(ids, i)
 	}
-	ids, err := nameRepo.InsertMulti(ctx, tks)
+
+	err := nameRepo.InsertMulti(ctx, tks)
 	if err != nil {
 		t.Fatalf("%+v", err)
 	}
 
 	t.Run("int(1件)", func(t *testing.T) {
-		req := &task.NameListReq{
-			Count: task.NumericCriteriaBase.Parse(1),
-		}
+		var tasks []*task.Name
 
-		tasks, err := nameRepo.List(ctx, req, nil)
+		err := nameRepo.List("count", 1).AllWithContext(ctx, &tasks)
 		if err != nil {
 			t.Fatalf("%+v", err)
 		}
@@ -320,11 +325,9 @@ func TestDatastoreListNameWithIndexes(t *testing.T) {
 	})
 
 	t.Run("bool(10件)", func(t *testing.T) {
-		req := &task.NameListReq{
-			Done: task.BoolCriteriaTrue,
-		}
+		var tasks []*task.Name
 
-		tasks, err := nameRepo.List(ctx, req, nil)
+		err := nameRepo.List("done", true).AllWithContext(ctx, &tasks)
 		if err != nil {
 			t.Fatalf("%+v", err)
 		}
@@ -335,11 +338,9 @@ func TestDatastoreListNameWithIndexes(t *testing.T) {
 	})
 
 	t.Run("like(10件)", func(t *testing.T) {
-		req := &task.NameListReq{
-			Desc: "ll",
-		}
+		var tasks []*task.Name
 
-		tasks, err := nameRepo.List(ctx, req, nil)
+		err := nameRepo.List("description", "ll").AllWithContext(ctx, &tasks)
 		if err != nil {
 			t.Fatalf("%+v", err)
 		}
@@ -351,11 +352,9 @@ func TestDatastoreListNameWithIndexes(t *testing.T) {
 
 	t.Run("prefix", func(t *testing.T) {
 		t.Run("Success", func(t *testing.T) {
-			req := &task.NameListReq{
-				Desc2: "Pre",
-			}
+			var tasks []*task.Name
 
-			tasks, err := nameRepo.List(ctx, req, nil)
+			err := nameRepo.List("description2", "Pre").AllWithContext(ctx, &tasks)
 			if err != nil {
 				t.Fatalf("%+v", err)
 			}
@@ -366,11 +365,9 @@ func TestDatastoreListNameWithIndexes(t *testing.T) {
 		})
 
 		t.Run("Failure", func(t *testing.T) {
-			req := &task.NameListReq{
-				Desc2: "He",
-			}
+			var tasks []*task.Name
 
-			tasks, err := nameRepo.List(ctx, req, nil)
+			err := nameRepo.List("description2", "He").AllWithContext(ctx, &tasks)
 			if err != nil {
 				t.Fatalf("%+v", err)
 			}
@@ -382,26 +379,9 @@ func TestDatastoreListNameWithIndexes(t *testing.T) {
 	})
 
 	t.Run("time.Time(10件)", func(t *testing.T) {
-		req := &task.NameListReq{
-			Created: now,
-		}
+		var tasks []*task.Name
 
-		tasks, err := nameRepo.List(ctx, req, nil)
-		if err != nil {
-			t.Fatalf("%+v", err)
-		}
-
-		if len(tasks) != 10 {
-			t.Fatal("not match")
-		}
-	})
-
-	t.Run("[]int(10件)", func(t *testing.T) {
-		req := &task.NameListReq{
-			PriceList: []int{1, 2, 3},
-		}
-
-		tasks, err := nameRepo.List(ctx, req, nil)
+		err := nameRepo.List("created", now).AllWithContext(ctx, &tasks)
 		if err != nil {
 			t.Fatalf("%+v", err)
 		}
@@ -423,8 +403,9 @@ func TestDatastore(t *testing.T) {
 	now := time.Unix(time.Now().Unix(), 0)
 	desc := "hello"
 
+	id := int64(1234)
 	err := taskRepo.Insert(ctx, &task.Task{
-		ID:      1234,
+		ID:      id,
 		Desc:    desc,
 		Created: now,
 		Done:    true,

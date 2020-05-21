@@ -9,7 +9,7 @@ import (
 
 // Task 拡張インデックスなし
 type Task struct {
-	ID         int64     `dynamo:"-,hash"`
+	ID         int64     `dynamo:"id,hash"`
 	Desc       string    `dynamo:"description"`
 	Created    time.Time `dynamo:"created"`
 	Done       bool      `dynamo:"done"`

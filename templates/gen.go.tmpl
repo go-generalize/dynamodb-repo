@@ -9,12 +9,6 @@ import (
 	"{{ .Name }}"
 {{- end }}
 
-{{- if and (eq .SliceExist true) (eq .EnableIndexes false) }}
-	"github.com/go-utils/dedupe"
-{{- end }}
-{{- if eq .EnableIndexes true }}
-	"github.com/knightso/xian"
-{{- end }}
 	"github.com/guregu/dynamo"
 	"golang.org/x/xerrors"
 )
@@ -36,7 +30,8 @@ type {{ .RepositoryInterfaceName }} interface {
 	DeleteMulti(ctx context.Context, subjects []*{{ .StructName }}) error
 	DeleteMultiBy{{ .HashKeyFieldName }}s(ctx context.Context, {{ .HashKeyValueName }}s []{{ .HashKeyFieldType }}) error
 	// List
-	List(ctx context.Context, req *{{ .StructName }}ListReq, q *dynamo.Scan) ([]*{{ .StructName }}, error)
+	List(name string, value interface{}) *dynamo.Query
+	Scan() *dynamo.Scan
 	// misc
 	GetTable() dynamo.Table
 	GetTableName() string
@@ -70,154 +65,16 @@ func (repo *{{ .RepositoryStructName }}) hashPair(subject *{{ .StructName }}) (s
 	return "'{{ .HashKeyFieldName }}'", fmt.Sprint(subject.{{ .HashKeyFieldName }})
 }
 
-{{- if eq .EnableIndexes true }}
-// saveIndexes 拡張フィルタを保存する
-func (repo *{{ .RepositoryStructName }}) saveIndexes(subjects ...*{{ .StructName }}) error {
-	for _, subject := range subjects {
-		idx := xian.NewIndexes({{ .StructName }}IndexesConfig)
-{{- range $fi := .FieldInfos }}
-{{- $PrefixIsSlice := HasPrefixSlice $fi.FieldType}}
-{{- range $idx := $fi.Indexes }}
-{{- if or (eq $fi.FieldType "bool") (eq $fi.FieldType "int" ) (eq $fi.FieldType "int64" ) (eq $fi.FieldType "float64" ) }}
-		idx.{{ $idx.Method }}({{ $idx.ConstName }}, subject.{{ $fi.Field }})
-{{- else if eq $fi.FieldType "string" }}
-{{- if eq $idx.Method "AddPrefix" }}
-		idx.{{ $idx.Method }}es({{ $idx.ConstName }}, subject.{{ $fi.Field }})
-{{- else }}
-		idx.{{ $idx.Method }}({{ $idx.ConstName }}, subject.{{ $fi.Field }})
-{{- end }}
-{{- else if eq $fi.FieldType "time.Time" }}
-		idx.{{ $idx.Method }}({{ $idx.ConstName }}, subject.{{ $fi.Field }}.Unix())
-{{- else if eq $PrefixIsSlice true }}
-		idx.{{ $idx.Method }}({{ $idx.ConstName }}, subject.{{ $fi.Field }})
-{{- end }}
-{{- end }}
-{{- end }}
-		built, err := idx.Build()
-		if err != nil {
-			return err
-		}
-		subject.Indexes = built
-	}
-
-	return nil
+// List ハッシュキーやGSIを利用した検索を行う
+// GSIを利用した場合、ListにはGSIが適用されている属性の名前と値を指定し、必ずIndexでインデックス名を指定する必要がある
+func (repo *{{ .RepositoryStructName }}) List(name string, value interface{}) *dynamo.Query {
+	return repo.table.Get(name, value)
 }
 
-// {{ .StructName }}IndexesConfig {{ .StructName }}用のIndexesConfigを設定する
-var {{ .StructName }}IndexesConfig = &xian.Config{
-	// IgnoreCase Case insensitive
-	// └── 大文字小文字を区別しない
-	IgnoreCase:         true,
-	// SaveNoFiltersIndex 検索時にフィルタを設定しない場合、この拡張フィルタなし検索用インデックスのEquality Filterが自動で適用される
-	// ├── falseで、拡張フィルタのあり・なしの両パターンの検索がある場合、カスタムインデックスを両パターン分用意しておく必要がある
-	// └── trueにしておくことでカスタムインデックスを半分に節約することができる
-	SaveNoFiltersIndex: true,
-}
-{{- end }}
-
-// {{ .StructName }}ListReq List取得時に渡すリクエスト
-// └─ bool/int(64)|float64 は stringの独自型で渡す(BoolCriteria | NumericCriteria)
-type {{ .StructName }}ListReq struct {
-{{- range .FieldInfos }}
-{{- if eq .FieldType "bool" }}
-	{{ .Field }} BoolCriteria
-{{- else if or (eq .FieldType "int") (eq .FieldType "int64") (eq .FieldType "float64" ) }}
-	{{ .Field }} NumericCriteria
-{{- else }}
-	{{ .Field }} {{ .FieldType }}
-{{- end }}
-{{- end }}
-}
-
-// List Queryを使用し条件でフィルターをする
-//  └─ 第3引数はNOT/OR/IN/RANGEなど、より複雑な条件を適用したいときにつける
-//      └─ 基本的にnilを渡せば良い
-// BUG(54mch4n) 潜在的なバグがあるかもしれない
-func (repo *{{ .RepositoryStructName }}) List(ctx context.Context, req *{{ .StructName }}ListReq, q *dynamo.Scan) ([]*{{ .StructName }}, error) {
-	var err error
-
-	if q == nil {
-		q = repo.db.Table("{{ .StructName }}").Scan()
-	}
-{{ $Enable := .EnableIndexes }}
-{{- if eq $Enable true }}
-	filters := xian.NewFilters({{ .StructName }}IndexesConfig)
-{{- end }}
-{{- range $fi := .FieldInfos }}
-{{- $PrefixIsSlice := HasPrefixSlice $fi.FieldType}}
-{{- if eq $fi.FieldType "bool" }}
-	if req.{{ $fi.Field }} != "" {
-{{- if eq $Enable true }}
-{{- range $idx := $fi.Indexes }}
-		filters.{{ $idx.Method }}({{ $idx.ConstName }}, req.{{ $fi.Field }})
-{{- end }}
-{{- else }}
-		q = q.Filter("'{{ $fi.DynamoTag }}' = ?", req.{{ $fi.Field }}.Bool())
-{{- end }}
-	}
-{{- else if eq $fi.FieldType "string" }}
-	if req.{{ $fi.Field }} != "" {
-{{- if eq $Enable true }}
-{{- range $idx := $fi.Indexes }}
-		filters.{{ $idx.Method }}({{ $idx.ConstName }}, req.{{ $fi.Field }})
-{{- end }}
-{{- else }}
-		q = q.Filter("'{{ $fi.DynamoTag }}' = ?", req.{{ $fi.Field }})
-{{- end }}
-	}
-{{- else if or (eq $fi.FieldType "int") (eq $fi.FieldType "int64") (eq $fi.FieldType "float64" ) }}
-	if req.{{ $fi.Field }} != NumericCriteriaEmpty {
-{{- if eq $Enable true }}
-{{- range $idx := $fi.Indexes }}
-		filters.{{ $idx.Method }}({{ $idx.ConstName }}, req.{{ $fi.Field }}.{{ Parse $fi.FieldType }}())
-{{- end }}
-{{- else }}
-		q = q.Filter("'{{ $fi.DynamoTag }}' = ?", req.{{ $fi.Field }}.{{ Parse $fi.FieldType }}())
-{{- end }}
-	}
-{{- else if eq $fi.FieldType "time.Time" }}
-	if !req.{{ $fi.Field }}.IsZero() {
-{{- if eq $Enable true }}
-{{- range $idx := $fi.Indexes }}
-		filters.{{ $idx.Method }}({{ $idx.ConstName }}, req.{{ $fi.Field }}.Unix())
-{{- end }}
-{{- else }}
-		q = q.Filter("'{{ $fi.DynamoTag }}' = ?", req.{{ $fi.Field }})
-{{- end }}
-	}
-{{- else if eq $PrefixIsSlice true }}
-	if len(req.{{ $fi.Field }}) > 0 {
-{{- if eq $Enable true }}
-{{- range $idx := $fi.Indexes }}
-		filters.{{ $idx.Method }}({{ $idx.ConstName }}, req.{{ $fi.Field }})
-{{- end }}
-{{- else }}
-		dedupe.Do(&req.{{ $fi.Field }})
-		for _, x := range req.{{ $fi.Field }} {
-			q = q.Filter("'{{ $fi.DynamoTag }}' = ?", x)
-		}
-{{- end }}
-	}
-{{- end }}
-{{- end }}
-{{ if eq $Enable true }}
-	built, err := filters.Build()
-	if err != nil {
-		return nil, err
-	}
-
-	for _, f := range built {
-		q = q.Filter("contains({{ .FieldInfoForIndexes.DynamoTag }}, ?)", f)
-	}
-{{- end }}
-	subjects := []*{{ .StructName }}{}
-	err = q.AllWithContext(ctx, &subjects)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return subjects, nil
+// Scan 検索ができない時テーブル全体もしくはGSI全体に対して検索をかける
+// パフォーマンスやコストの観点から可能な限りListを使用する方が望ましい
+func (repo *{{ .RepositoryStructName }}) Scan() *dynamo.Scan {
+	return repo.table.Scan()
 }
 
 // Get 処理中の {{ .StructName }} の取得処理一切の責任を持ち、これを行う
@@ -231,12 +88,6 @@ func (repo *{{ .RepositoryStructName }}) Get(ctx context.Context, {{ .HashKeyVal
 
 // Insert 処理中の {{ .StructName }} の登録処理一切の責任を持ち、これを行う
 func (repo *{{ .RepositoryStructName }}) Insert(ctx context.Context, subject *{{ .StructName }}) error {
-{{- if eq .EnableIndexes true }}
-	if err := repo.saveIndexes(subject); err != nil {
-		return xerrors.Errorf("error in saveIndexes method: %w", err)
-	}
-{{- end }}
-
 	return repo.table.Put(subject).RunWithContext(ctx)
 }
 
@@ -246,11 +97,6 @@ func (repo *{{ .RepositoryStructName }}) Update(ctx context.Context, subject *{{
 	if err != nil {
 		return err
 	}
-{{- if eq .EnableIndexes true }}
-	if err := repo.saveIndexes(subject); err != nil {
-		return xerrors.Errorf("error in saveIndexes method: %w", err)
-	}
-{{- end }}
 
 	if reflect.DeepEqual(old, subject) {
 		return xerrors.Errorf("cannot update because there is no difference. Hash: %v", subject.ID)
@@ -277,12 +123,6 @@ func (repo *{{ .RepositoryStructName }}) Update(ctx context.Context, subject *{{
 
 // ForceUpdate 処理中の {{ .StructName }} の更新処理一切の責任を持ち、これを行う
 func (repo *{{ .RepositoryStructName }}) ForceUpdate(ctx context.Context, subject *{{ .StructName }}) error {
-{{- if eq .EnableIndexes true }}
-	if err := repo.saveIndexes(subject); err != nil {
-		return xerrors.Errorf("error in saveIndexes method: %w", err)
-	}
-{{- end }}
-
 	u := repo.table.Update(repo.hashPair(subject)).
 {{- range $i, $fi := .FieldInfos }}
 		Set("{{ $fi.DynamoTag }}", subject.{{ $fi.Field }}){{ HasColon $i $.FieldInfos }}
@@ -317,11 +157,6 @@ func (repo *{{ .RepositoryStructName }}) GetMulti(ctx context.Context, {{ RangeK
 func (repo *{{ .RepositoryStructName }}) InsertMulti(ctx context.Context, subjects []*{{ .StructName }}) error {
 	tx := repo.db.WriteTx()
 	for _, subject := range subjects {
-{{- if eq .EnableIndexes true }}
-		if err := repo.saveIndexes(subject); err != nil {
-			return xerrors.Errorf("error in saveIndexes method: %w", err)
-		}
-{{- end }}
 		tx.Put(repo.table.Put(subject))
 	}
 	return tx.RunWithContext(ctx)
@@ -331,11 +166,6 @@ func (repo *{{ .RepositoryStructName }}) InsertMulti(ctx context.Context, subjec
 func (repo *{{ .RepositoryStructName }}) UpdateMulti(ctx context.Context, subjects []*{{ .StructName }}) error {
 	tx := repo.db.WriteTx()
 	for _, subject := range subjects {
-{{- if eq .EnableIndexes true }}
-		if err := repo.saveIndexes(subject); err != nil {
-			return xerrors.Errorf("error in saveIndexes method: %w", err)
-		}
-{{- end }}
 		u := repo.table.Update(repo.hashPair(subject)).
 {{- if ne .RangeKeyFieldName "" }}
 			Range("'{{ .RangeKeyFieldTagName }}'", subject.{{ .RangeKeyFieldName }}).

@@ -23,18 +23,10 @@ func init() {
 	}
 }
 
-type IndexesInfo struct {
-	Comment   string
-	ConstName string
-	Label     string
-	Method    string
-}
-
 type FieldInfo struct {
 	DynamoTag string
 	Field     string
 	FieldType string
-	Indexes   []*IndexesInfo
 }
 
 type ImportInfo struct {
@@ -65,10 +57,7 @@ type generator struct {
 	FieldInfos []*FieldInfo
 
 	BoolCriteriaCnt     int
-	EnableGSI           bool // Global Secondary Index
-	EnableIndexes       bool
 	FieldInfoForIndexes *FieldInfo
-	GSICount            int
 	SliceExist          bool
 }
 
@@ -79,12 +68,12 @@ func (g *generator) setting() {
 }
 
 func (g *generator) buildConditions() {
-	for _, field := range g.FieldInfos {
-		switch field.FieldType {
-		case "time.Time":
-			g.ImportList = append(g.ImportList, ImportInfo{"time"})
-		}
-	}
+	// for _, field := range g.FieldInfos {
+	// 	switch field.FieldType {
+	// 	case "time.Time":
+	// 		g.ImportList = append(g.ImportList, ImportInfo{"time"})
+	// 	}
+	// }
 }
 
 func (g *generator) generate(writer io.Writer) {
