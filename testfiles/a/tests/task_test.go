@@ -45,6 +45,12 @@ func createTable(t *testing.T, schema string) {
 		"--cli-input-json",
 		"file://"+fp.Name(),
 	)
+	cmd.Env = append(
+		os.Environ(),
+		"AWS_DEFAULT_REGION=ap-northeast-1",
+		"AWS_ACCESS_KEY_ID=access_key",
+		"AWS_SECRET_ACCESS_KEY=access_secret",
+	)
 
 	output, err := cmd.CombinedOutput()
 
