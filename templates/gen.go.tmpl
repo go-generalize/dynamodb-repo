@@ -67,7 +67,7 @@ func (repo *{{ .RepositoryStructName }}) GetTableName() string {
 
 // HasArg HasKeyのペアを返す
 func (repo *{{ .RepositoryStructName }}) hashPair(subject *{{ .StructName }}) (string, string) {
-	return "'{{ .HashKeyFieldName }}'", subject.{{ .HashKeyFieldName }}
+	return "'{{ .HashKeyFieldName }}'", fmt.Sprint(subject.{{ .HashKeyFieldName }})
 }
 
 {{- if eq .EnableIndexes true }}
