@@ -46,7 +46,6 @@ func createTable(t *testing.T, schema string) {
 		"file://"+fp.Name(),
 	)
 
-	cmd.Stdin = strings.NewReader(schema)
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
