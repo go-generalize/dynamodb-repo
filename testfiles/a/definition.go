@@ -21,15 +21,11 @@ const NameSchema = `
 		},
 		{
 			"AttributeName": "done",
-			"AttributeType": "BOOL"
+			"AttributeType": "N"
 		},
 		{
 			"AttributeName": "count",
 			"AttributeType": "N"
-		},
-		{
-			"AttributeName": "priceList",
-			"AttributeType": "NS"
 		}
 	],
 	"TableName": "Name",
@@ -51,7 +47,10 @@ const NameSchema = `
 					"KeyType": "HASH",
 					"AttributeName": "count"
 				}
-			]
+			],
+			"Projection": {
+				"ProjectionType": "ALL"
+			}
 		},
 		{
 			"IndexName": "description-index",
@@ -64,7 +63,10 @@ const NameSchema = `
 					"KeyType": "HASH",
 					"AttributeName": "description"
 				}
-			]
+			],
+			"Projection": {
+				"ProjectionType": "ALL"
+			}
 		},
 		{
 			"IndexName": "description2-index",
@@ -77,7 +79,10 @@ const NameSchema = `
 					"KeyType": "HASH",
 					"AttributeName": "description2"
 				}
-			]
+			],
+			"Projection": {
+				"ProjectionType": "ALL"
+			}
 		},
 		{
 			"IndexName": "done-index",
@@ -90,7 +95,10 @@ const NameSchema = `
 					"KeyType": "HASH",
 					"AttributeName": "done"
 				}
-			]
+			],
+			"Projection": {
+				"ProjectionType": "ALL"
+			}
 		},
 		{
 			"IndexName": "created-index",
@@ -103,7 +111,10 @@ const NameSchema = `
 					"KeyType": "HASH",
 					"AttributeName": "created"
 				}
-			]
+			],
+			"Projection": {
+				"ProjectionType": "ALL"
+			}
 		}
 	],
 	"ProvisionedThroughput": {
@@ -121,40 +132,20 @@ const TaskSchema = `
 			"AttributeType": "N"
 		},
 		{
-			"AttributeName": "description",
-			"AttributeType": "S"
-		},
-		{
 			"AttributeName": "created",
 			"AttributeType": "S"
 		},
 		{
 			"AttributeName": "done",
-			"AttributeType": "BOOL"
-		},
-		{
-			"AttributeName": "done2",
-			"AttributeType": "BOOL"
+			"AttributeType": "N"
 		},
 		{
 			"AttributeName": "count",
 			"AttributeType": "N"
 		},
 		{
-			"AttributeName": "count64",
-			"AttributeType": "N"
-		},
-		{
-			"AttributeName": "nameList",
-			"AttributeType": "SS"
-		},
-		{
 			"AttributeName": "proportion",
 			"AttributeType": "N"
-		},
-		{
-			"AttributeName": "flag",
-			"AttributeType": "BOOL"
 		}
 	],
 	"TableName": "Task",
@@ -176,7 +167,10 @@ const TaskSchema = `
 					"KeyType": "HASH",
 					"AttributeName": "count"
 				}
-			]
+			],
+			"Projection": {
+				"ProjectionType": "ALL"
+			}
 		},
 		{
 			"IndexName": "proportion-index",
@@ -189,7 +183,10 @@ const TaskSchema = `
 					"KeyType": "HASH",
 					"AttributeName": "proportion"
 				}
-			]
+			],
+			"Projection": {
+				"ProjectionType": "ALL"
+			}
 		},
 		{
 			"IndexName": "done-index",
@@ -202,7 +199,10 @@ const TaskSchema = `
 					"KeyType": "HASH",
 					"AttributeName": "done"
 				}
-			]
+			],
+			"Projection": {
+				"ProjectionType": "ALL"
+			}
 		},
 		{
 			"IndexName": "created-index",
@@ -215,7 +215,10 @@ const TaskSchema = `
 					"KeyType": "HASH",
 					"AttributeName": "created"
 				}
-			]
+			],
+			"Projection": {
+				"ProjectionType": "ALL"
+			}
 		}
 	],
 	"ProvisionedThroughput": {
