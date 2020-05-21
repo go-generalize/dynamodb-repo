@@ -34,6 +34,8 @@ func createTable(t *testing.T, schema string) {
 	)
 	fp.Close()
 
+	t.Logf("file name: %+v", fp.Name())
+
 	cmd := exec.Command(
 		"aws",
 		"dynamodb",
