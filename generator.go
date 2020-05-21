@@ -156,13 +156,13 @@ func (g *generator) setFuncMap() template.FuncMap {
 			}
 			return ""
 		},
-		"RangeKeyArgCheckGetMulti": func() string {
+		"RangeKeyArgCheckPairs": func() string {
 			if g.RangeKeyFieldName != "" {
 				return fmt.Sprintf("pairs map[%s]%s", g.HashKeyFieldType, g.RangeKeyFieldType)
 			}
 			return fmt.Sprintf("%ss []%s", g.HashKeyValueName, g.HashKeyFieldType)
 		},
-		"RangeKeyValueCheck": func() string {
+		"RangeKeyValueCheckForGet": func() string {
 			if g.RangeKeyFieldName != "" {
 				return fmt.Sprintf(".Range(\"'%s'\", dynamo.Equal, %s)", g.RangeKeyFieldTagName, g.RangeKeyValueName)
 			}
@@ -185,6 +185,30 @@ func (g *generator) setFuncMap() template.FuncMap {
 				return "key, value"
 			}
 			return g.HashKeyValueName
+		},
+		"RangeKeyValueCheckForDelete": func() string {
+			if g.RangeKeyFieldName != "" {
+				return fmt.Sprintf(".Range(\"'%s'\", subject.%s)", g.RangeKeyFieldTagName, g.RangeKeyFieldName)
+			}
+			return ""
+		},
+		"RangeKeyValueCheckForDeletePair": func() string {
+			if g.RangeKeyFieldName != "" {
+				return fmt.Sprintf(".Range(\"'%s'\", %s)", g.RangeKeyFieldTagName, g.RangeKeyValueName)
+			}
+			return ""
+		},
+		"RangeKeyForDeleteMultiByPairs": func() string {
+			if g.RangeKeyFieldName != "" {
+				return fmt.Sprintf("(\"'%s'\", key).Range(\"'%s'\", value)", g.HashKeyFieldTagName, g.RangeKeyFieldTagName)
+			}
+			return fmt.Sprintf("(\"'%s'\", %s)", g.HashKeyFieldTagName, g.HashKeyValueName)
+		},
+		"FuncNameByValue": func() string {
+			if g.RangeKeyFieldName != "" {
+				return "Pair"
+			}
+			return g.HashKeyFieldName
 		},
 	}
 }
