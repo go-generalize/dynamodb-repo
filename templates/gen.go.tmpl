@@ -3,20 +3,12 @@ package {{ .PackageName }}
 
 import (
 	"context"
-	"fmt"
 	"reflect"
 {{- range .ImportList }}
-	// "{{ .Name }}"
+	"{{ .Name }}"
 {{- end }}
 
-{{- if and (eq .SliceExist true) (eq .EnableIndexes false) }}
-	// "github.com/go-utils/dedupe"
-{{- end }}
-{{- if eq .EnableIndexes true }}
-	"github.com/knightso/xian"
-{{- end }}
 	"github.com/guregu/dynamo"
-	"golang.org/x/xerrors"
 )
 {{ $generate := "go:generate" }}
 //{{ $generate }} mockgen -source {{ .GeneratedFileName }}.go -destination mock_{{ .GeneratedFileName }}/mock_{{ .GeneratedFileName }}.go
@@ -36,7 +28,8 @@ type {{ .RepositoryInterfaceName }} interface {
 	DeleteMulti(ctx context.Context, subjects []*{{ .StructName }}) error
 	DeleteMultiBy{{ FuncNameByValue }}s(ctx context.Context, {{ RangeKeyArgCheckPairs }}) error
 	// List
-	// TODO List(ctx context.Context, req *{{ .StructName }}ListReq) ([]*{{ .StructName }}, error)
+	List(name string, value interface{}) *dynamo.Query
+	Scan() *dynamo.Scan
 	// misc
 	GetTable() dynamo.Table
 	GetTableName() string
@@ -66,59 +59,26 @@ func (repo *{{ .RepositoryStructName }}) GetTableName() string {
 }
 
 // HasArg HasKeyのペアを返す
-func (repo *{{ .RepositoryStructName }}) hashPair(subject *{{ .StructName }}) (string, string) {
-	return "'{{ .HashKeyFieldTagName }}'", subject.{{ .HashKeyFieldName }}
+func (repo *{{ .RepositoryStructName }}) hashPair(subject *{{ .StructName }}) (string, interface{}) {
+	return "{{ .HashKeyFieldTagName }}", subject.{{ .HashKeyFieldName }}
 }
 
-{{- if eq .EnableIndexes true }}
-// saveIndexes 拡張フィルタを保存する
-func (repo *{{ .RepositoryStructName }}) saveIndexes(subjects ...*{{ .StructName }}) error {
-	for _, subject := range subjects {
-		idx := xian.NewIndexes({{ .StructName }}IndexesConfig)
-{{- range $fi := .FieldInfos }}
-{{- $PrefixIsSlice := HasPrefixSlice $fi.FieldType}}
-{{- range $idx := $fi.Indexes }}
-{{- if or (eq $fi.FieldType "bool") (eq $fi.FieldType "int" ) (eq $fi.FieldType "int64" ) (eq $fi.FieldType "float64" ) }}
-		idx.{{ $idx.Method }}({{ $idx.ConstName }}, subject.{{ $fi.Field }})
-{{- else if eq $fi.FieldType "string" }}
-{{- if eq $idx.Method "AddPrefix" }}
-		idx.{{ $idx.Method }}es({{ $idx.ConstName }}, subject.{{ $fi.Field }})
-{{- else }}
-		idx.{{ $idx.Method }}({{ $idx.ConstName }}, subject.{{ $fi.Field }})
-{{- end }}
-{{- else if eq $fi.FieldType "time.Time" }}
-		idx.{{ $idx.Method }}({{ $idx.ConstName }}, subject.{{ $fi.Field }}.Unix())
-{{- else if eq $PrefixIsSlice true }}
-		idx.{{ $idx.Method }}({{ $idx.ConstName }}, subject.{{ $fi.Field }})
-{{- end }}
-{{- end }}
-{{- end }}
-		built, err := idx.Build()
-		if err != nil {
-			return err
-		}
-		subject.Indexes = built
-	}
-
-	return nil
+// List ハッシュキーやGSIを利用した検索を行う
+// GSIを利用した場合、ListにはGSIが適用されている属性の名前と値を指定し、必ずIndexでインデックス名を指定する必要がある
+func (repo *{{ .RepositoryStructName }}) List(name string, value interface{}) *dynamo.Query {
+	return repo.table.Get(name, value)
 }
 
-// {{ .StructName }}IndexesConfig {{ .StructName }}用のIndexesConfigを設定する
-var {{ .StructName }}IndexesConfig = &xian.Config{
-	// IgnoreCase Case insensitive
-	// └── 大文字小文字を区別しない
-	IgnoreCase:         true,
-	// SaveNoFiltersIndex 検索時にフィルタを設定しない場合、この拡張フィルタなし検索用インデックスのEquality Filterが自動で適用される
-	// ├── falseで、拡張フィルタのあり・なしの両パターンの検索がある場合、カスタムインデックスを両パターン分用意しておく必要がある
-	// └── trueにしておくことでカスタムインデックスを半分に節約することができる
-	SaveNoFiltersIndex: true,
+// Scan 検索ができない時テーブル全体もしくはGSI全体に対して検索をかける
+// パフォーマンスやコストの観点から可能な限りListを使用する方が望ましい
+func (repo *{{ .RepositoryStructName }}) Scan() *dynamo.Scan {
+	return repo.table.Scan()
 }
-{{- end }}
 
 // Get 処理中の {{ .StructName }} の取得処理一切の責任を持ち、これを行う
 func (repo *{{ .RepositoryStructName }}) Get(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ RangeKeyArgCheck }}) (*{{ .StructName }}, error) {
 	subject := new({{ .StructName }})
-	if err := repo.table.Get("'{{ .HashKeyFieldName }}'", {{ .HashKeyValueName }}){{ RangeKeyValueCheckForGet }}.OneWithContext(ctx, &subject); err != nil {
+	if err := repo.table.Get("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ RangeKeyValueCheckForGet }}.OneWithContext(ctx, &subject); err != nil {
 		return nil, err
 	}
 	return subject, nil
@@ -135,26 +95,28 @@ func (repo *{{ .RepositoryStructName }}) Update(ctx context.Context, subject *{{
 	if err != nil {
 		return err
 	}
-	if reflect.DeepEqual(old, subject) {
-		return xerrors.Errorf("cannot update because there is no difference. Hash: %v", subject.ID)
+
+	updated := map[string]interface{}{}
+{{- range $i, $fi := .FieldInfos }}
+	if !reflect.DeepEqual(old.{{$fi.Field}}, subject.{{$fi.Field}}) {
+		updated["{{$fi.DynamoTag}}"] = subject.{{$fi.Field}}
 	}
+{{- end }}
+
+	if len(updated) == 0 {
+		return ErrNoDifference
+	}
+
 	q := repo.table.Update(repo.hashPair(subject))
-	bv := reflect.Indirect(reflect.ValueOf(old))
-	av := reflect.Indirect(reflect.ValueOf(subject))
-	for n := 0; n < av.NumField(); n++ {
-		f := av.Type().Field(n)
-		bf := bv.Index(n)
-		af := bv.Index(n)
-		path := fmt.Sprintf("'%s'", f.Name)
-		if bf.Interface() != af.Interface() {
-			switch af.Kind() {
-			case reflect.Array, reflect.Slice:
-				q = q.SetSet(path, af.Interface())
-			default:
-				q = q.Set(path, af.Interface())
-			}
+	for path, v := range updated {
+		switch reflect.ValueOf(v).Kind() {
+		case reflect.Array, reflect.Slice:
+			q = q.SetSet(path, v)
+		default:
+			q = q.Set(path, v)
 		}
 	}
+
 	return q.RunWithContext(ctx)
 }
 
@@ -174,7 +136,7 @@ func (repo *{{ .RepositoryStructName }}) Delete(ctx context.Context, subject *{{
 
 // DeleteBy{{ .HashKeyFieldName }} 処理中の {{ .StructName }} の{{ .HashKeyFieldName }}から削除処理一切の責任を持ち、これを行う
 func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ RangeKeyArgCheck }}) error {
-	return repo.table.Delete("'{{ .HashKeyFieldName }}'", {{ .HashKeyValueName }}){{ RangeKeyValueCheckForDeletePair }}.RunWithContext(ctx)
+	return repo.table.Delete("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ RangeKeyValueCheckForDeletePair }}.RunWithContext(ctx)
 }
 
 // GetMulti 処理中の {{ .StructName }} の一括取得処理一切の責任を持ち、これを行う
@@ -204,10 +166,10 @@ func (repo *{{ .RepositoryStructName }}) UpdateMulti(ctx context.Context, subjec
 	for _, subject := range subjects {
 		u := repo.table.Update(repo.hashPair(subject)).
 {{- if ne .RangeKeyFieldName "" }}
-			Range("'{{ .RangeKeyFieldTagName }}'", subject.{{ .RangeKeyFieldName }}).
+			Range("{{ .RangeKeyFieldTagName }}", subject.{{ .RangeKeyFieldName }}).
 {{- end }}
 {{- range $i, $fi := .FieldInfos }}
-			Set("'{{ $fi.DynamoTag }}'", subject.{{ $fi.Field }}){{ HasColon $i $.FieldInfos }}
+			Set("{{ $fi.DynamoTag }}", subject.{{ $fi.Field }}){{ HasColon $i $.FieldInfos }}
 {{- end }}
 		tx.Update(u)
 	}

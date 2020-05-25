@@ -12,7 +12,6 @@ import (
 
 	"github.com/fatih/structtag"
 	"github.com/go-utils/cont"
-	"github.com/iancoleman/strcase"
 	"golang.org/x/xerrors"
 )
 
@@ -98,8 +97,6 @@ func traverse(pkg *ast.Package, fs *token.FileSet, structName string) error {
 }
 
 func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) error {
-	dupMap := make(map[string]int)
-	fieldLabel = gen.StructName + queryLabel
 	for _, field := range structType.Fields.List {
 		// structの各fieldを調査
 		if len(field.Names) != 1 {
@@ -127,9 +124,7 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 				DynamoTag: name,
 				Field:     name,
 				FieldType: typeName,
-				Indexes:   make([]*IndexesInfo, 0),
 			}
-			appendIndexesInfo(fieldInfo, dupMap)
 			gen.FieldInfos = append(gen.FieldInfos, fieldInfo)
 			continue
 		}
@@ -146,45 +141,27 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 				Field:     name,
 				FieldType: typeName,
 			}
-			if name == "Indexes" {
-				gen.EnableIndexes = true
-				if tag, err := dynamoTagCheck(pos, tags); err != nil {
-					return xerrors.Errorf("error in tagCheck method: %w", err)
-				} else if tag != "" {
-					fieldInfo.DynamoTag = tag
-				}
-				if !gen.EnableGSI {
-					gen.EnableGSI = true
-				}
-				gen.GSICount++
-				gen.FieldInfoForIndexes = fieldInfo
-				continue
-			}
 			dynamoTag, err := tags.Get("dynamo")
 			if err != nil {
-				fieldInfo.Indexes = make([]*IndexesInfo, 0)
-				appendIndexesInfo(fieldInfo, dupMap)
 				gen.FieldInfos = append(gen.FieldInfos, fieldInfo)
 				continue
 			}
 			sp := strings.Split(dynamoTag.Value(), ",")
+
+			if err := dynamoTagCheck(pos, sp[0]); err != nil {
+				return xerrors.Errorf("tag validator failed: %w", err)
+			}
 			if len(sp) == 1 {
-				fieldInfo.Indexes = make([]*IndexesInfo, 0)
-				if fieldInfo, err = appendIndexer(pos, tags, fieldInfo, dupMap); err != nil {
-					return xerrors.Errorf("error in appendIndexer: %w", err)
-				}
+				fieldInfo.DynamoTag = sp[0]
 				gen.FieldInfos = append(gen.FieldInfos, fieldInfo)
+
 				continue
 			} else {
-				if err := keyFieldHandle(gen, dynamoTag.Value(), name, typeName, pos); err != nil {
+				if err := keyFieldHandle(gen, sp[0], sp[1], name, typeName, pos); err != nil {
 					return xerrors.Errorf("error in keyFieldHandle: %w", err)
 				}
 			}
 		}
-	}
-
-	if gen.GSICount > 5 {
-		log.Fatal("Up to 5 Global Secondary Index")
 	}
 
 	{
@@ -195,16 +172,6 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 		defer fp.Close()
 
 		gen.generate(fp)
-	}
-
-	if gen.EnableIndexes {
-		path := gen.FileName + "_label.go"
-		fp, err := os.Create(path)
-		if err != nil {
-			panic(err)
-		}
-		defer fp.Close()
-		gen.generateLabel(fp)
 	}
 
 	{
@@ -219,12 +186,8 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 	return nil
 }
 
-func keyFieldHandle(gen *generator, dynamoTag, name, typeName, pos string) error {
-	sp := strings.Split(dynamoTag, ",")
-	if len(sp) < 2 {
-		return xerrors.Errorf("%s: key field for dynamo should have dynamo:\"xxx,hash\" tag", pos)
-	}
-	switch sp[1] {
+func keyFieldHandle(gen *generator, label, keyKind, name, typeName, pos string) error {
+	switch keyKind {
 	case "hash":
 		gen.HashKeyFieldName = name
 		gen.HashKeyFieldType = typeName
@@ -235,11 +198,11 @@ func keyFieldHandle(gen *generator, dynamoTag, name, typeName, pos string) error
 			return xerrors.Errorf("%s: supported key types are int, int64, string", pos)
 		}
 
-		gen.HashKeyValueName = strcase.ToLowerCamel(name)
-		if sp[0] == "" {
+		gen.HashKeyValueName = name
+		if label == "" {
 			gen.HashKeyFieldTagName = name
 		} else {
-			gen.HashKeyFieldTagName = strcase.ToLowerCamel(sp[0])
+			gen.HashKeyFieldTagName = label
 		}
 	case "range":
 		if gen.RangeKeyFieldName != "" || gen.RangeKeyFieldType != "" {
@@ -254,109 +217,13 @@ func keyFieldHandle(gen *generator, dynamoTag, name, typeName, pos string) error
 			return xerrors.Errorf("%s: supported key types are int, int64, string", pos)
 		}
 
-		gen.RangeKeyValueName = strcase.ToLowerCamel(name)
-		if sp[0] == "" {
+		gen.RangeKeyValueName = name
+		if label == "" {
 			gen.RangeKeyFieldTagName = name
 		} else {
-			gen.RangeKeyFieldTagName = strcase.ToLowerCamel(sp[0])
+			gen.RangeKeyFieldTagName = label
 		}
 	}
 
 	return nil
-}
-
-func appendIndexer(pos string, tags *structtag.Tags, fieldInfo *FieldInfo, dupMap map[string]int) (*FieldInfo, error) {
-	if tag, err := dynamoTagCheck(pos, tags); err != nil {
-		return nil, xerrors.Errorf("error in tagCheck method: %w", err)
-	} else if tag != "" {
-		fieldInfo.DynamoTag = tag
-	}
-	if idr, err := tags.Get("indexer"); err != nil || fieldInfo.FieldType != typeString {
-		appendIndexesInfo(fieldInfo, dupMap)
-	} else {
-		filters := strings.Split(idr.Value(), ",")
-		dupIdr := make(map[string]struct{})
-		for _, fil := range filters {
-			idx := &IndexesInfo{
-				ConstName: fieldLabel + fieldInfo.Field,
-				Label:     uppercaseExtraction(fieldInfo.Field, dupMap),
-				Method:    "Add",
-			}
-			var dupFlag string
-			switch fil {
-			case "p", "prefix": // 前方一致 (AddPrefix)
-				idx.Method += prefix
-				idx.ConstName += prefix
-				idx.Comment = fmt.Sprintf("%s %s前方一致", idx.ConstName, fieldInfo.Field)
-				dupFlag = "p"
-			case "s", "suffix": /* TODO 後方一致
-				idx.Method += Suffix
-				idx.ConstName += Suffix
-				idx.Comment = fmt.Sprintf("%s %s後方一致", idx.ConstName, name)
-				dup = "s"*/
-			case "e", "equal": // 完全一致 (Add) Default
-				idx.Comment = fmt.Sprintf("%s %s", idx.ConstName, fieldInfo.Field)
-				dupIdr["equal"] = struct{}{}
-				dupFlag = "e"
-			case "l", "like": // 部分一致
-				idx.Method += biunigrams
-				idx.ConstName += "Like"
-				idx.Comment = fmt.Sprintf("%s %s部分一致", idx.ConstName, fieldInfo.Field)
-				dupFlag = "l"
-			default:
-				continue
-			}
-			if _, ok := dupIdr[dupFlag]; ok {
-				continue
-			}
-			dupIdr[dupFlag] = struct{}{}
-			fieldInfo.Indexes = append(fieldInfo.Indexes, idx)
-		}
-	}
-	return fieldInfo, nil
-}
-
-func uppercaseExtraction(name string, dupMap map[string]int) (lower string) {
-	for _, x := range name {
-		if 65 <= x && x <= 90 {
-			lower += string(x + 32)
-		}
-	}
-	if _, ok := dupMap[lower]; !ok {
-		dupMap[lower] = 1
-	} else {
-		dupMap[lower]++
-		lower = fmt.Sprintf("%s%d", lower, dupMap[lower])
-	}
-	return
-}
-
-func appendIndexesInfo(fieldInfo *FieldInfo, dupMap map[string]int) {
-	idx := &IndexesInfo{
-		ConstName: fieldLabel + fieldInfo.Field,
-		Label:     uppercaseExtraction(fieldInfo.Field, dupMap),
-		Method:    "Add",
-	}
-	idx.Comment = fmt.Sprintf("%s %s", idx.ConstName, fieldInfo.Field)
-	if fieldInfo.FieldType != typeString {
-		idx.Method += "Something"
-	}
-	fieldInfo.Indexes = append(fieldInfo.Indexes, idx)
-}
-
-func dynamoTagCheck(pos string, tags *structtag.Tags) (string, error) {
-	if dynamoTag, err := tags.Get("dynamo"); err == nil {
-		tag := strings.Split(dynamoTag.Value(), ",")[0]
-		if tag == "" {
-			return "", nil
-		}
-		if !valueCheck.MatchString(tag) {
-			return "", xerrors.Errorf("%s: key field for `dynamo` should have other than blanks and symbols tag", pos)
-		}
-		if strings.Contains("0123456789", string(tag[0])) {
-			return "", xerrors.Errorf("%s: key field for `dynamo` should have prefix other than numbers required", pos)
-		}
-		return tag, nil
-	}
-	return "", nil
 }

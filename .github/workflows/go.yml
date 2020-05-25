@@ -15,6 +15,10 @@ jobs:
       DYNAMODB_LOCAL_ENDPOINT: http://127.0.0.1:8000
 
     steps:
+      - name: Set up AWS CLI
+        run: |
+          sudo apt-get install -y awscli
+
       - name: Set up Go 1.12
         uses: actions/setup-go@v1
         with:

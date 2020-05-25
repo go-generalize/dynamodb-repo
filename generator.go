@@ -23,18 +23,10 @@ func init() {
 	}
 }
 
-type IndexesInfo struct {
-	Comment   string
-	ConstName string
-	Label     string
-	Method    string
-}
-
 type FieldInfo struct {
 	DynamoTag string
 	Field     string
 	FieldType string
-	Indexes   []*IndexesInfo
 }
 
 type ImportInfo struct {
@@ -65,26 +57,13 @@ type generator struct {
 	FieldInfos []*FieldInfo
 
 	BoolCriteriaCnt     int
-	EnableGSI           bool // Global Secondary Index
-	EnableIndexes       bool
 	FieldInfoForIndexes *FieldInfo
-	GSICount            int
 	SliceExist          bool
 }
 
 func (g *generator) setting() {
 	g.RepositoryInterfaceName = g.StructName + "Repository"
 	g.RepositoryStructName = strcase.ToLowerCamel(g.RepositoryInterfaceName)
-	g.buildConditions()
-}
-
-func (g *generator) buildConditions() {
-	for _, field := range g.FieldInfos {
-		switch field.FieldType {
-		case "time.Time":
-			g.ImportList = append(g.ImportList, ImportInfo{"time"})
-		}
-	}
 }
 
 func (g *generator) generate(writer io.Writer) {
@@ -93,16 +72,6 @@ func (g *generator) generate(writer io.Writer) {
 	contents := getFileContents("gen")
 
 	t := template.Must(template.New("Template").Funcs(funcMap).Parse(contents))
-
-	if err := t.Execute(writer, g); err != nil {
-		log.Printf("failed to execute template: %+v", err)
-	}
-}
-
-func (g *generator) generateLabel(writer io.Writer) {
-	contents := getFileContents("label")
-
-	t := template.Must(template.New("TemplateLabel").Parse(contents))
 
 	if err := t.Execute(writer, g); err != nil {
 		log.Printf("failed to execute template: %+v", err)
@@ -122,9 +91,8 @@ func (g *generator) generateConstant(writer io.Writer) {
 func (g *generator) setFuncMap() template.FuncMap {
 	return template.FuncMap{
 		"Parse": func(fieldType string) string {
-			if strings.HasPrefix(fieldType, "[]") {
-				fieldType = fieldType[2:]
-			}
+			fieldType = strings.TrimPrefix(fieldType, "[]")
+
 			fn := "Int"
 			switch fieldType {
 			case typeInt:
@@ -164,7 +132,7 @@ func (g *generator) setFuncMap() template.FuncMap {
 		},
 		"RangeKeyValueCheckForGet": func() string {
 			if g.RangeKeyFieldName != "" {
-				return fmt.Sprintf(".Range(\"'%s'\", dynamo.Equal, %s)", g.RangeKeyFieldTagName, g.RangeKeyValueName)
+				return fmt.Sprintf(".Range(\"%s\", dynamo.Equal, %s)", g.RangeKeyFieldTagName, g.RangeKeyValueName)
 			}
 			return ""
 		},
@@ -188,21 +156,21 @@ func (g *generator) setFuncMap() template.FuncMap {
 		},
 		"RangeKeyValueCheckForDelete": func() string {
 			if g.RangeKeyFieldName != "" {
-				return fmt.Sprintf(".Range(\"'%s'\", subject.%s)", g.RangeKeyFieldTagName, g.RangeKeyFieldName)
+				return fmt.Sprintf(".Range(\"%s\", subject.%s)", g.RangeKeyFieldTagName, g.RangeKeyFieldName)
 			}
 			return ""
 		},
 		"RangeKeyValueCheckForDeletePair": func() string {
 			if g.RangeKeyFieldName != "" {
-				return fmt.Sprintf(".Range(\"'%s'\", %s)", g.RangeKeyFieldTagName, g.RangeKeyValueName)
+				return fmt.Sprintf(".Range(\"%s\", %s)", g.RangeKeyFieldTagName, g.RangeKeyValueName)
 			}
 			return ""
 		},
 		"RangeKeyForDeleteMultiByPairs": func() string {
 			if g.RangeKeyFieldName != "" {
-				return fmt.Sprintf("(\"'%s'\", key).Range(\"'%s'\", value)", g.HashKeyFieldTagName, g.RangeKeyFieldTagName)
+				return fmt.Sprintf("(\"%s\", key).Range(\"%s\", value)", g.HashKeyFieldTagName, g.RangeKeyFieldTagName)
 			}
-			return fmt.Sprintf("(\"'%s'\", %s)", g.HashKeyFieldTagName, g.HashKeyValueName)
+			return fmt.Sprintf("(\"%s\", %s)", g.HashKeyFieldTagName, g.HashKeyValueName)
 		},
 		"FuncNameByValue": func() string {
 			if g.RangeKeyFieldName != "" {
