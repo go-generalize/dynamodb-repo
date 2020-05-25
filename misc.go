@@ -17,6 +17,7 @@ var (
 		typeString,
 		typeInt,
 		typeInt64,
+		typeFloat32,
 		typeFloat64,
 		typeTime,
 	}

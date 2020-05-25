@@ -9,7 +9,7 @@ import (
 
 // Name 拡張インデックスあり
 type Name struct {
-	ID        int64     `dynamo:"-,hash"`
+	ID        int64     `dynamo:"id,hash"`
 	Created   time.Time `dynamo:"created"`
 	Desc      string    `dynamo:"description"`
 	Desc2     string    `dynamo:"description2"`

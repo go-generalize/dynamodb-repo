@@ -12,7 +12,6 @@ import (
 
 	"github.com/fatih/structtag"
 	"github.com/go-utils/cont"
-	"github.com/iancoleman/strcase"
 	"golang.org/x/xerrors"
 )
 
@@ -150,6 +149,7 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 			}
 			sp := strings.Split(dynamoTag.Value(), ",")
 			if len(sp) == 1 {
+				fieldInfo.DynamoTag = sp[0]
 				gen.FieldInfos = append(gen.FieldInfos, fieldInfo)
 
 				continue
@@ -199,11 +199,11 @@ func keyFieldHandle(gen *generator, dynamoTag, name, typeName, pos string) error
 			return xerrors.Errorf("%s: supported key types are int, int64, string", pos)
 		}
 
-		gen.HashKeyValueName = strcase.ToLowerCamel(name)
+		gen.HashKeyValueName = name
 		if sp[0] == "" {
 			gen.HashKeyFieldTagName = name
 		} else {
-			gen.HashKeyFieldTagName = strcase.ToLowerCamel(sp[0])
+			gen.HashKeyFieldTagName = sp[0]
 		}
 	case "range":
 		if gen.RangeKeyFieldName != "" || gen.RangeKeyFieldType != "" {
@@ -218,11 +218,11 @@ func keyFieldHandle(gen *generator, dynamoTag, name, typeName, pos string) error
 			return xerrors.Errorf("%s: supported key types are int, int64, string", pos)
 		}
 
-		gen.RangeKeyValueName = strcase.ToLowerCamel(name)
+		gen.RangeKeyValueName = name
 		if sp[0] == "" {
 			gen.RangeKeyFieldTagName = name
 		} else {
-			gen.RangeKeyFieldTagName = strcase.ToLowerCamel(sp[0])
+			gen.RangeKeyFieldTagName = sp[0]
 		}
 	}
 

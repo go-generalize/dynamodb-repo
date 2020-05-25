@@ -20,10 +20,6 @@ const NameSchema = `
 			"AttributeType": "S"
 		},
 		{
-			"AttributeName": "done",
-			"AttributeType": "N"
-		},
-		{
 			"AttributeName": "count",
 			"AttributeType": "N"
 		}
@@ -85,22 +81,6 @@ const NameSchema = `
 			}
 		},
 		{
-			"IndexName": "done-index",
-			"ProvisionedThroughput": {
-				"WriteCapacityUnits": 5,
-				"ReadCapacityUnits": 5
-			},
-			"KeySchema": [
-				{
-					"KeyType": "HASH",
-					"AttributeName": "done"
-				}
-			],
-			"Projection": {
-				"ProjectionType": "ALL"
-			}
-		},
-		{
 			"IndexName": "created-index",
 			"ProvisionedThroughput": {
 				"WriteCapacityUnits": 5,
@@ -134,10 +114,6 @@ const TaskSchema = `
 		{
 			"AttributeName": "created",
 			"AttributeType": "S"
-		},
-		{
-			"AttributeName": "done",
-			"AttributeType": "N"
 		},
 		{
 			"AttributeName": "count",
@@ -182,22 +158,6 @@ const TaskSchema = `
 				{
 					"KeyType": "HASH",
 					"AttributeName": "proportion"
-				}
-			],
-			"Projection": {
-				"ProjectionType": "ALL"
-			}
-		},
-		{
-			"IndexName": "done-index",
-			"ProvisionedThroughput": {
-				"WriteCapacityUnits": 5,
-				"ReadCapacityUnits": 5
-			},
-			"KeySchema": [
-				{
-					"KeyType": "HASH",
-					"AttributeName": "done"
 				}
 			],
 			"Projection": {

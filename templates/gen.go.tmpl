@@ -3,14 +3,12 @@ package {{ .PackageName }}
 
 import (
 	"context"
-	"fmt"
 	"reflect"
 {{- range .ImportList }}
 	"{{ .Name }}"
 {{- end }}
 
 	"github.com/guregu/dynamo"
-	"golang.org/x/xerrors"
 )
 {{ $generate := "go:generate" }}
 //{{ $generate }} mockgen -source {{ .GeneratedFileName }}.go -destination mock_{{ .GeneratedFileName }}/mock_{{ .GeneratedFileName }}.go
@@ -61,8 +59,8 @@ func (repo *{{ .RepositoryStructName }}) GetTableName() string {
 }
 
 // HasArg HasKeyのペアを返す
-func (repo *{{ .RepositoryStructName }}) hashPair(subject *{{ .StructName }}) (string, string) {
-	return "'{{ .HashKeyFieldTagName }}'", fmt.Sprint(subject.{{ .HashKeyFieldName }})
+func (repo *{{ .RepositoryStructName }}) hashPair(subject *{{ .StructName }}) (string, interface{}) {
+	return "{{ .HashKeyFieldTagName }}", subject.{{ .HashKeyFieldName }}
 }
 
 // List ハッシュキーやGSIを利用した検索を行う
@@ -80,7 +78,7 @@ func (repo *{{ .RepositoryStructName }}) Scan() *dynamo.Scan {
 // Get 処理中の {{ .StructName }} の取得処理一切の責任を持ち、これを行う
 func (repo *{{ .RepositoryStructName }}) Get(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ RangeKeyArgCheck }}) (*{{ .StructName }}, error) {
 	subject := new({{ .StructName }})
-	if err := repo.table.Get("'{{ .HashKeyFieldName }}'", {{ .HashKeyValueName }}){{ RangeKeyValueCheckForGet }}.OneWithContext(ctx, &subject); err != nil {
+	if err := repo.table.Get("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ RangeKeyValueCheckForGet }}.OneWithContext(ctx, &subject); err != nil {
 		return nil, err
 	}
 	return subject, nil
@@ -98,26 +96,27 @@ func (repo *{{ .RepositoryStructName }}) Update(ctx context.Context, subject *{{
 		return err
 	}
 
-	if reflect.DeepEqual(old, subject) {
-		return xerrors.Errorf("cannot update because there is no difference. Hash: %v", subject.ID)
+	updated := map[string]interface{}{}
+{{- range $i, $fi := .FieldInfos }}
+	if !reflect.DeepEqual(old.{{$fi.Field}}, subject.{{$fi.Field}}) {
+		updated["{{$fi.DynamoTag}}"] = subject.{{$fi.Field}}
 	}
+{{- end }}
+
+	if len(updated) == 0 {
+		return ErrNoDifference
+	}
+
 	q := repo.table.Update(repo.hashPair(subject))
-	bv := reflect.Indirect(reflect.ValueOf(old))
-	av := reflect.Indirect(reflect.ValueOf(subject))
-	for n := 0; n < av.NumField(); n++ {
-		f := av.Type().Field(n)
-		bf := bv.Index(n)
-		af := bv.Index(n)
-		path := fmt.Sprintf("'%s'", f.Name)
-		if bf.Interface() != af.Interface() {
-			switch af.Kind() {
-			case reflect.Array, reflect.Slice:
-				q = q.SetSet(path, af.Interface())
-			default:
-				q = q.Set(path, af.Interface())
-			}
+	for path, v := range updated {
+		switch reflect.ValueOf(v).Kind() {
+		case reflect.Array, reflect.Slice:
+			q = q.SetSet(path, v)
+		default:
+			q = q.Set(path, v)
 		}
 	}
+
 	return q.RunWithContext(ctx)
 }
 
@@ -137,7 +136,7 @@ func (repo *{{ .RepositoryStructName }}) Delete(ctx context.Context, subject *{{
 
 // DeleteBy{{ .HashKeyFieldName }} 処理中の {{ .StructName }} の{{ .HashKeyFieldName }}から削除処理一切の責任を持ち、これを行う
 func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ RangeKeyArgCheck }}) error {
-	return repo.table.Delete("'{{ .HashKeyFieldName }}'", {{ .HashKeyValueName }}){{ RangeKeyValueCheckForDeletePair }}.RunWithContext(ctx)
+	return repo.table.Delete("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ RangeKeyValueCheckForDeletePair }}.RunWithContext(ctx)
 }
 
 // GetMulti 処理中の {{ .StructName }} の一括取得処理一切の責任を持ち、これを行う
@@ -167,10 +166,10 @@ func (repo *{{ .RepositoryStructName }}) UpdateMulti(ctx context.Context, subjec
 	for _, subject := range subjects {
 		u := repo.table.Update(repo.hashPair(subject)).
 {{- if ne .RangeKeyFieldName "" }}
-			Range("'{{ .RangeKeyFieldTagName }}'", subject.{{ .RangeKeyFieldName }}).
+			Range("{{ .RangeKeyFieldTagName }}", subject.{{ .RangeKeyFieldName }}).
 {{- end }}
 {{- range $i, $fi := .FieldInfos }}
-			Set("'{{ $fi.DynamoTag }}'", subject.{{ $fi.Field }}){{ HasColon $i $.FieldInfos }}
+			Set("{{ $fi.DynamoTag }}", subject.{{ $fi.Field }}){{ HasColon $i $.FieldInfos }}
 {{- end }}
 		tx.Update(u)
 	}
