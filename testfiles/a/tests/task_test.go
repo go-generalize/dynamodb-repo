@@ -16,7 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
-	task "github.com/go-generalize/dynamodb-repo/testfiles/a"
+	model "github.com/go-generalize/dynamodb-repo/testfiles/a"
 	"github.com/guregu/dynamo"
 	"golang.org/x/xerrors"
 )
@@ -90,13 +90,13 @@ func initDynamoClient(t *testing.T) *dynamo.DB {
 		DisableSSL:  aws.Bool(true),
 	})
 
-	createTable(t, "Name", task.NameSchema)
-	createTable(t, "Task", task.TaskSchema)
+	createTable(t, "Name", model.NameSchema)
+	createTable(t, "Task", model.TaskSchema)
 
 	return client
 }
 
-func compareTask(t *testing.T, expected, actual *task.Task) {
+func compareTask(t *testing.T, expected, actual *model.Task) {
 	t.Helper()
 
 	if actual.ID != expected.ID {
@@ -119,7 +119,7 @@ func compareTask(t *testing.T, expected, actual *task.Task) {
 func TestDatastoreTransactionTask(t *testing.T) {
 	client := initDynamoClient(t)
 
-	taskRepo := task.NewTaskRepository(client)
+	taskRepo := model.NewTaskRepository(client)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	var ids []int64
@@ -134,9 +134,9 @@ func TestDatastoreTransactionTask(t *testing.T) {
 	desc := "Hello, World!"
 
 	t.Run("Multi", func(tr *testing.T) {
-		tks := make([]*task.Task, 0)
+		tks := make([]*model.Task, 0)
 		for i := int64(1); i <= 10; i++ {
-			tk := &task.Task{
+			tk := &model.Task{
 				ID:         i * 100,
 				Desc:       fmt.Sprintf("%s%d", desc, i),
 				Created:    now,
@@ -145,7 +145,7 @@ func TestDatastoreTransactionTask(t *testing.T) {
 				Count:      int(i),
 				Count64:    0,
 				Proportion: 0.12345 + float64(i),
-				Flag:       task.Flag(true),
+				Flag:       model.Flag(true),
 				NameList:   []string{"a", "b", "c"},
 			}
 			tks = append(tks, tk)
@@ -156,9 +156,9 @@ func TestDatastoreTransactionTask(t *testing.T) {
 			tr.Fatalf("%+v", err)
 		}
 
-		tks2 := make([]*task.Task, 0)
+		tks2 := make([]*model.Task, 0)
 		for i := int64(1); i <= 10; i++ {
-			tk := &task.Task{
+			tk := &model.Task{
 				ID:         i * 100,
 				Desc:       fmt.Sprintf("%s%d", desc, i),
 				Created:    now,
@@ -167,7 +167,7 @@ func TestDatastoreTransactionTask(t *testing.T) {
 				Count:      int(i),
 				Count64:    i,
 				Proportion: 0.12345 + float64(i),
-				Flag:       task.Flag(true),
+				Flag:       model.Flag(true),
 				NameList:   []string{"a", "b", "c"},
 			}
 			tks2 = append(tks2, tk)
@@ -182,7 +182,7 @@ func TestDatastoreTransactionTask(t *testing.T) {
 	})
 
 	t.Run("Single", func(tr *testing.T) {
-		tk := &task.Task{
+		tk := &model.Task{
 			ID:         1001,
 			Desc:       fmt.Sprintf("%s%d", desc, 1001),
 			Created:    now,
@@ -218,7 +218,7 @@ func TestDatastoreTransactionTask(t *testing.T) {
 func TestDatastoreListTask(t *testing.T) {
 	client := initDynamoClient(t)
 
-	taskRepo := task.NewTaskRepository(client)
+	taskRepo := model.NewTaskRepository(client)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	var ids []int64
@@ -232,9 +232,9 @@ func TestDatastoreListTask(t *testing.T) {
 	now := time.Unix(0, time.Now().UnixNano())
 	desc := "Hello, World!"
 
-	tks := make([]*task.Task, 0)
+	tks := make([]*model.Task, 0)
 	for i := int64(1); i <= 10; i++ {
-		tk := &task.Task{
+		tk := &model.Task{
 			ID:         i * 100,
 			Desc:       fmt.Sprintf("%s%d", desc, i),
 			Created:    now,
@@ -243,7 +243,7 @@ func TestDatastoreListTask(t *testing.T) {
 			Count:      int(i),
 			Count64:    0,
 			Proportion: 0.12345 + float64(i),
-			Flag:       task.Flag(true),
+			Flag:       model.Flag(true),
 			NameList:   []string{"a", "b", "c"},
 		}
 		tks = append(tks, tk)
@@ -255,7 +255,7 @@ func TestDatastoreListTask(t *testing.T) {
 	}
 
 	t.Run("int(1件)", func(t *testing.T) {
-		var tasks []*task.Task
+		var tasks []*model.Task
 
 		err := taskRepo.List("count", 1).Index("count-index").AllWithContext(ctx, &tasks)
 		if err != nil {
@@ -268,7 +268,7 @@ func TestDatastoreListTask(t *testing.T) {
 	})
 
 	t.Run("float(1件)", func(t *testing.T) {
-		var tasks []*task.Task
+		var tasks []*model.Task
 
 		prop := 1.12345
 		err := taskRepo.List("proportion", prop).Index("proportion-index").AllWithContext(ctx, &tasks)
@@ -282,7 +282,7 @@ func TestDatastoreListTask(t *testing.T) {
 	})
 
 	t.Run("time.Time(10件)", func(t *testing.T) {
-		var tasks []*task.Task
+		var tasks []*model.Task
 
 		err := taskRepo.List("created", now).Index("created-index").AllWithContext(ctx, &tasks)
 		if err != nil {
@@ -298,7 +298,7 @@ func TestDatastoreListTask(t *testing.T) {
 func TestDatastoreListNameWithIndexes(t *testing.T) {
 	client := initDynamoClient(t)
 
-	nameRepo := task.NewNameRepository(client)
+	nameRepo := model.NewNameRepository(client)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	var ids []int64
@@ -312,9 +312,9 @@ func TestDatastoreListNameWithIndexes(t *testing.T) {
 	now := time.Unix(0, time.Now().UnixNano())
 	desc := "Hello, World!"
 
-	tks := make([]*task.Name, 0)
+	tks := make([]*model.Name, 0)
 	for i := int64(1); i <= 10; i++ {
-		tk := &task.Name{
+		tk := &model.Name{
 			ID:        i,
 			Created:   now,
 			Desc:      fmt.Sprintf("%s%d", desc, i),
@@ -333,7 +333,7 @@ func TestDatastoreListNameWithIndexes(t *testing.T) {
 	}
 
 	t.Run("int(1件)", func(t *testing.T) {
-		var tasks []*task.Name
+		var tasks []*model.Name
 
 		err := nameRepo.List("count", 1).Index("count-index").AllWithContext(ctx, &tasks)
 		if err != nil {
@@ -346,7 +346,7 @@ func TestDatastoreListNameWithIndexes(t *testing.T) {
 	})
 
 	t.Run("string matches exactly(10件)", func(t *testing.T) {
-		var tasks []*task.Name
+		var tasks []*model.Name
 
 		err := nameRepo.List("description", "Hello, World!10").Index("description-index").AllWithContext(ctx, &tasks)
 		if err != nil {
@@ -359,7 +359,7 @@ func TestDatastoreListNameWithIndexes(t *testing.T) {
 	})
 
 	t.Run("time.Time(10件)", func(t *testing.T) {
-		var tasks []*task.Name
+		var tasks []*model.Name
 
 		err := nameRepo.List("created", now).Index("created-index").AllWithContext(ctx, &tasks)
 		if err != nil {
@@ -375,7 +375,7 @@ func TestDatastoreListNameWithIndexes(t *testing.T) {
 func TestDatastore(t *testing.T) {
 	client := initDynamoClient(t)
 
-	taskRepo := task.NewTaskRepository(client)
+	taskRepo := model.NewTaskRepository(client)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -384,7 +384,7 @@ func TestDatastore(t *testing.T) {
 	desc := "hello"
 
 	id := int64(1234)
-	err := taskRepo.Insert(ctx, &task.Task{
+	err := taskRepo.Insert(ctx, &model.Task{
 		ID:      id,
 		Desc:    desc,
 		Created: now,
@@ -401,7 +401,7 @@ func TestDatastore(t *testing.T) {
 		t.Fatalf("failed to get item: %+v", err)
 	}
 
-	compareTask(t, &task.Task{
+	compareTask(t, &model.Task{
 		ID:      id,
 		Desc:    desc,
 		Created: now,
@@ -418,14 +418,14 @@ func TestDatastore(t *testing.T) {
 		t.Errorf("GetMulti should return 1 item: %+v", err)
 	}
 
-	compareTask(t, &task.Task{
+	compareTask(t, &model.Task{
 		ID:      id,
 		Desc:    desc,
 		Created: now,
 		Done:    true,
 	}, rets[0])
 
-	compareTask(t, &task.Task{
+	compareTask(t, &model.Task{
 		ID:      id,
 		Desc:    desc,
 		Created: now,
