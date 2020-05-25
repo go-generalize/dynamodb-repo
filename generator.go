@@ -64,16 +64,6 @@ type generator struct {
 func (g *generator) setting() {
 	g.RepositoryInterfaceName = g.StructName + "Repository"
 	g.RepositoryStructName = strcase.ToLowerCamel(g.RepositoryInterfaceName)
-	g.buildConditions()
-}
-
-func (g *generator) buildConditions() {
-	// for _, field := range g.FieldInfos {
-	// 	switch field.FieldType {
-	// 	case "time.Time":
-	// 		g.ImportList = append(g.ImportList, ImportInfo{"time"})
-	// 	}
-	// }
 }
 
 func (g *generator) generate(writer io.Writer) {
