@@ -78,16 +78,6 @@ func (g *generator) generate(writer io.Writer) {
 	}
 }
 
-func (g *generator) generateLabel(writer io.Writer) {
-	contents := getFileContents("label")
-
-	t := template.Must(template.New("TemplateLabel").Parse(contents))
-
-	if err := t.Execute(writer, g); err != nil {
-		log.Printf("failed to execute template: %+v", err)
-	}
-}
-
 func (g *generator) generateConstant(writer io.Writer) {
 	contents := getFileContents("constant")
 
@@ -101,9 +91,8 @@ func (g *generator) generateConstant(writer io.Writer) {
 func (g *generator) setFuncMap() template.FuncMap {
 	return template.FuncMap{
 		"Parse": func(fieldType string) string {
-			if strings.HasPrefix(fieldType, "[]") {
-				fieldType = fieldType[2:]
-			}
+			fieldType = strings.TrimPrefix(fieldType, "[]")
+
 			fn := "Int"
 			switch fieldType {
 			case typeInt:

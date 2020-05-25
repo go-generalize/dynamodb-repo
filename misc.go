@@ -10,8 +10,7 @@ import (
 )
 
 var (
-	fieldLabel  string
-	valueCheck  = regexp.MustCompile("^[0-9a-zA-Z_]+$")
+	valueCheck  = regexp.MustCompile("^[a-zA-Z_][0-9a-zA-Z_]*$")
 	supportType = []string{
 		typeBool,
 		typeString,
@@ -53,4 +52,15 @@ func getTypeName(typ ast.Expr) string {
 	default:
 		return ""
 	}
+}
+
+func dynamoTagCheck(pos string, label string) error {
+	if label == "" {
+		return nil
+	}
+	if !valueCheck.MatchString(label) {
+		return xerrors.Errorf("%s: the tag must be ^[a-zA-Z_][0-9a-zA-Z_]*$", pos)
+	}
+
+	return nil
 }

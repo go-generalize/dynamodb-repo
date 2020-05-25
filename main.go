@@ -97,7 +97,6 @@ func traverse(pkg *ast.Package, fs *token.FileSet, structName string) error {
 }
 
 func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) error {
-	fieldLabel = gen.StructName + queryLabel
 	for _, field := range structType.Fields.List {
 		// structの各fieldを調査
 		if len(field.Names) != 1 {
@@ -148,13 +147,17 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 				continue
 			}
 			sp := strings.Split(dynamoTag.Value(), ",")
+
+			if err := dynamoTagCheck(pos, sp[0]); err != nil {
+				return xerrors.Errorf("tag validator failed: %w", err)
+			}
 			if len(sp) == 1 {
 				fieldInfo.DynamoTag = sp[0]
 				gen.FieldInfos = append(gen.FieldInfos, fieldInfo)
 
 				continue
 			} else {
-				if err := keyFieldHandle(gen, dynamoTag.Value(), name, typeName, pos); err != nil {
+				if err := keyFieldHandle(gen, sp[0], sp[1], name, typeName, pos); err != nil {
 					return xerrors.Errorf("error in keyFieldHandle: %w", err)
 				}
 			}
@@ -183,12 +186,8 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 	return nil
 }
 
-func keyFieldHandle(gen *generator, dynamoTag, name, typeName, pos string) error {
-	sp := strings.Split(dynamoTag, ",")
-	if len(sp) < 2 {
-		return xerrors.Errorf("%s: key field for dynamo should have dynamo:\"xxx,hash\" tag", pos)
-	}
-	switch sp[1] {
+func keyFieldHandle(gen *generator, label, keyKind, name, typeName, pos string) error {
+	switch keyKind {
 	case "hash":
 		gen.HashKeyFieldName = name
 		gen.HashKeyFieldType = typeName
@@ -200,10 +199,10 @@ func keyFieldHandle(gen *generator, dynamoTag, name, typeName, pos string) error
 		}
 
 		gen.HashKeyValueName = name
-		if sp[0] == "" {
+		if label == "" {
 			gen.HashKeyFieldTagName = name
 		} else {
-			gen.HashKeyFieldTagName = sp[0]
+			gen.HashKeyFieldTagName = label
 		}
 	case "range":
 		if gen.RangeKeyFieldName != "" || gen.RangeKeyFieldType != "" {
@@ -219,44 +218,12 @@ func keyFieldHandle(gen *generator, dynamoTag, name, typeName, pos string) error
 		}
 
 		gen.RangeKeyValueName = name
-		if sp[0] == "" {
+		if label == "" {
 			gen.RangeKeyFieldTagName = name
 		} else {
-			gen.RangeKeyFieldTagName = sp[0]
+			gen.RangeKeyFieldTagName = label
 		}
 	}
 
 	return nil
-}
-
-func uppercaseExtraction(name string, dupMap map[string]int) (lower string) {
-	for _, x := range name {
-		if 65 <= x && x <= 90 {
-			lower += string(x + 32)
-		}
-	}
-	if _, ok := dupMap[lower]; !ok {
-		dupMap[lower] = 1
-	} else {
-		dupMap[lower]++
-		lower = fmt.Sprintf("%s%d", lower, dupMap[lower])
-	}
-	return
-}
-
-func dynamoTagCheck(pos string, tags *structtag.Tags) (string, error) {
-	if dynamoTag, err := tags.Get("dynamo"); err == nil {
-		tag := strings.Split(dynamoTag.Value(), ",")[0]
-		if tag == "" {
-			return "", nil
-		}
-		if !valueCheck.MatchString(tag) {
-			return "", xerrors.Errorf("%s: key field for `dynamo` should have other than blanks and symbols tag", pos)
-		}
-		if strings.Contains("0123456789", string(tag[0])) {
-			return "", xerrors.Errorf("%s: key field for `dynamo` should have prefix other than numbers required", pos)
-		}
-		return tag, nil
-	}
-	return "", nil
 }
