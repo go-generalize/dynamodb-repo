@@ -29,6 +29,10 @@ const NameSchema = `
 		{
 			"AttributeName": "id",
 			"KeyType": "HASH"
+		},
+		{
+			"AttributeName": "count",
+			"KeyType": "RANGE"
 		}
 	],
 	"GlobalSecondaryIndexes": [
