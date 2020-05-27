@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	model "github.com/go-generalize/dynamodb-repo/testfiles/a"
 	"github.com/guregu/dynamo"
 	"golang.org/x/xerrors"
@@ -103,12 +104,12 @@ func compareTask(t *testing.T, expected, actual *model.Task) {
 		t.Fatalf("unexpected id: %d(expected: %d)", actual.ID, expected.ID)
 	}
 
-	if !actual.Created.Equal(expected.Created) {
-		t.Fatalf("unexpected time: %s(expected: %s)", actual.Created, expected.Created)
+	if !time.Time(actual.Created).Equal(time.Time(expected.Created)) {
+		t.Fatalf("unexpected time: %s(expected: %s)", time.Time(actual.Created), time.Time(expected.Created))
 	}
 
 	if actual.Desc != expected.Desc {
-		t.Fatalf("unexpected desc: %s(expected: %s)", actual.Desc, expected.Created)
+		t.Fatalf("unexpected desc: %s(expected: %s)", actual.Desc, expected.Desc)
 	}
 
 	if actual.Done != expected.Done {
@@ -130,7 +131,7 @@ func TestDynamoDBTransactionTask(t *testing.T) {
 		}
 	}()
 
-	now := time.Unix(0, time.Now().UnixNano())
+	now := dynamodbattribute.UnixTime(time.Unix(0, time.Now().UnixNano()))
 	desc := "Hello, World!"
 
 	t.Run("Multi", func(tr *testing.T) {
@@ -229,7 +230,7 @@ func TestDynamoDBListTask(t *testing.T) {
 		}
 	}()
 
-	now := time.Unix(0, time.Now().UnixNano())
+	now := dynamodbattribute.UnixTime(time.Unix(0, time.Now().UnixNano()))
 	desc := "Hello, World!"
 
 	tks := make([]*model.Task, 0)
@@ -309,7 +310,7 @@ func TestDynamoDBListNameWithRangeKey(t *testing.T) {
 		}
 	}()
 
-	now := time.Unix(0, time.Now().UnixNano())
+	now := dynamodbattribute.UnixTime(time.Unix(0, time.Now().UnixNano()))
 	desc := "Hello, World!"
 
 	tks := make([]*model.Name, 0)
@@ -397,7 +398,7 @@ func TestDynamoDB(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	now := time.Unix(time.Now().Unix(), 0)
+	now := dynamodbattribute.UnixTime(time.Unix(time.Now().Unix(), 0))
 	desc := "hello"
 
 	id := int64(1234)

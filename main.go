@@ -108,11 +108,13 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 
 		typeName := getTypeName(field.Type)
 		if !cont.Contains(supportType, typeName) {
-			log.Printf(
-				"%s: the type of `%s` is an invalid type in struct `%s` [%s]\n",
-				pos, name, gen.StructName, typeName,
-			)
-			continue
+			if !strings.HasSuffix(typeName, ".UnixTime") {
+				log.Printf(
+					"%s: the type of `%s` is an invalid type in struct `%s` [%s]\n",
+					pos, name, gen.StructName, typeName,
+				)
+				continue
+			}
 		}
 
 		if strings.HasPrefix(typeName, "[]") {

@@ -17,7 +17,7 @@ const NameSchema = `
 		},
 		{
 			"AttributeName": "created",
-			"AttributeType": "S"
+			"AttributeType": "N"
 		},
 		{
 			"AttributeName": "count",
@@ -117,7 +117,7 @@ const TaskSchema = `
 		},
 		{
 			"AttributeName": "created",
-			"AttributeType": "S"
+			"AttributeType": "N"
 		},
 		{
 			"AttributeName": "count",
