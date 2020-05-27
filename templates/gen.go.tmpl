@@ -142,9 +142,9 @@ func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}(ctx conte
 // GetMulti 処理中の {{ .StructName }} の一括取得処理一切の責任を持ち、これを行う
 func (repo *{{ .RepositoryStructName }}) GetMulti(ctx context.Context, {{ RangeKeyArgCheckPairs }}) (subjects []*{{ .StructName }}, err error) {
 	for {{ RangeKeyForTerms }} {
-		subject, err :=  repo.Get(ctx, {{ RangeKeyForValue }})
+		subject, err := repo.Get(ctx, {{ RangeKeyForValue }})
 		if err != nil {
-			return nil,  err
+			return nil, err
 		}
 		subjects = append(subjects, subject)
 	}
