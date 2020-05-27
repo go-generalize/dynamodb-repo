@@ -116,7 +116,7 @@ func compareTask(t *testing.T, expected, actual *model.Task) {
 	}
 }
 
-func TestDatastoreTransactionTask(t *testing.T) {
+func TestDynamoDBTransactionTask(t *testing.T) {
 	client := initDynamoClient(t)
 
 	taskRepo := model.NewTaskRepository(client)
@@ -215,7 +215,7 @@ func TestDatastoreTransactionTask(t *testing.T) {
 	})
 }
 
-func TestDatastoreListTask(t *testing.T) {
+func TestDynamoDBListTask(t *testing.T) {
 	client := initDynamoClient(t)
 
 	taskRepo := model.NewTaskRepository(client)
@@ -295,7 +295,7 @@ func TestDatastoreListTask(t *testing.T) {
 	})
 }
 
-func TestDatastoreListNameWithIndexes(t *testing.T) {
+func TestDynamoDBListNameWithRangeKey(t *testing.T) {
 	client := initDynamoClient(t)
 
 	nameRepo := model.NewNameRepository(client)
@@ -372,7 +372,7 @@ func TestDatastoreListNameWithIndexes(t *testing.T) {
 	})
 }
 
-func TestDatastore(t *testing.T) {
+func TestDynamoDB(t *testing.T) {
 	client := initDynamoClient(t)
 
 	taskRepo := model.NewTaskRepository(client)
