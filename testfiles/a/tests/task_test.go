@@ -370,6 +370,23 @@ func TestDynamoDBListNameWithRangeKey(t *testing.T) {
 			t.Fatal("not match")
 		}
 	})
+
+	t.Run("time.Time&int(1件)", func(t *testing.T) {
+		var tasks []*model.Name
+
+		err := nameRepo.List("created", now).
+			Index("created-index").
+			Filter("'count' = ?", 1).
+			AllWithContext(ctx, &tasks)
+
+		if err != nil {
+			t.Fatalf("%+v", err)
+		}
+
+		if len(tasks) != 1 {
+			t.Fatal("not match")
+		}
+	})
 }
 
 func TestDynamoDB(t *testing.T) {
