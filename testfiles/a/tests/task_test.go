@@ -301,10 +301,10 @@ func TestDynamoDBListNameWithRangeKey(t *testing.T) {
 	nameRepo := model.NewNameRepository(client)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	var ids []int64
+	pairs := make(map[int64]int, 0)
 	defer func() {
 		defer cancel()
-		if err := nameRepo.DeleteMultiByIDs(ctx, ids); err != nil {
+		if err := nameRepo.DeleteMultiByPairs(ctx, pairs); err != nil {
 			t.Fatal(err)
 		}
 	}()
@@ -324,7 +324,7 @@ func TestDynamoDBListNameWithRangeKey(t *testing.T) {
 			PriceList: []int{1, 2, 3, 4, 5},
 		}
 		tks = append(tks, tk)
-		ids = append(ids, i)
+		pairs[i] = int(i)
 	}
 
 	err := nameRepo.InsertMulti(ctx, tks)
