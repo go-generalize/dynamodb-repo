@@ -7,7 +7,7 @@ import (
 //go:generate dynamodb-repo Task
 //go:generate gofmt -w ./
 
-// Task 拡張インデックスなし
+// Task RangeKeyなし
 type Task struct {
 	ID         int64     `dynamo:"id,hash"`
 	Desc       string    `dynamo:"description"`
