@@ -11,7 +11,7 @@ import (
 	"github.com/guregu/dynamo"
 )
 {{ $generate := "go:generate" }}
-//{{ $generate }} mockgen -source {{ .GeneratedFileName }}.go -destination mock_{{ .GeneratedFileName }}/mock_{{ .GeneratedFileName }}.go
+//{{ $generate }} mockgen -source {{ .GeneratedFileName }}.go -destination mock/mock_{{ .GeneratedFileName }}/mock_{{ .GeneratedFileName }}.go
 
 type {{ .RepositoryInterfaceName }} interface {
 	// Single
