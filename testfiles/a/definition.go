@@ -17,7 +17,7 @@ const NameSchema = `
 		},
 		{
 			"AttributeName": "created",
-			"AttributeType": "S"
+			"AttributeType": "N"
 		},
 		{
 			"AttributeName": "count",
@@ -29,6 +29,10 @@ const NameSchema = `
 		{
 			"AttributeName": "id",
 			"KeyType": "HASH"
+		},
+		{
+			"AttributeName": "count",
+			"KeyType": "RANGE"
 		}
 	],
 	"GlobalSecondaryIndexes": [
@@ -113,7 +117,7 @@ const TaskSchema = `
 		},
 		{
 			"AttributeName": "created",
-			"AttributeType": "S"
+			"AttributeType": "N"
 		},
 		{
 			"AttributeName": "count",

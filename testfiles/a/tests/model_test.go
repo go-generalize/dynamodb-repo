@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	model "github.com/go-generalize/dynamodb-repo/testfiles/a"
 	"github.com/guregu/dynamo"
 	"golang.org/x/xerrors"
@@ -103,12 +104,12 @@ func compareTask(t *testing.T, expected, actual *model.Task) {
 		t.Fatalf("unexpected id: %d(expected: %d)", actual.ID, expected.ID)
 	}
 
-	if !actual.Created.Equal(expected.Created) {
-		t.Fatalf("unexpected time: %s(expected: %s)", actual.Created, expected.Created)
+	if !time.Time(actual.Created).Equal(time.Time(expected.Created)) {
+		t.Fatalf("unexpected time: %s(expected: %s)", time.Time(actual.Created), time.Time(expected.Created))
 	}
 
 	if actual.Desc != expected.Desc {
-		t.Fatalf("unexpected desc: %s(expected: %s)", actual.Desc, expected.Created)
+		t.Fatalf("unexpected desc: %s(expected: %s)", actual.Desc, expected.Desc)
 	}
 
 	if actual.Done != expected.Done {
@@ -116,7 +117,7 @@ func compareTask(t *testing.T, expected, actual *model.Task) {
 	}
 }
 
-func TestDatastoreTransactionTask(t *testing.T) {
+func TestDynamoDBTransactionTask(t *testing.T) {
 	client := initDynamoClient(t)
 
 	taskRepo := model.NewTaskRepository(client)
@@ -130,7 +131,7 @@ func TestDatastoreTransactionTask(t *testing.T) {
 		}
 	}()
 
-	now := time.Unix(0, time.Now().UnixNano())
+	now := dynamodbattribute.UnixTime(time.Unix(0, time.Now().UnixNano()))
 	desc := "Hello, World!"
 
 	t.Run("Multi", func(tr *testing.T) {
@@ -215,7 +216,7 @@ func TestDatastoreTransactionTask(t *testing.T) {
 	})
 }
 
-func TestDatastoreListTask(t *testing.T) {
+func TestDynamoDBListTask(t *testing.T) {
 	client := initDynamoClient(t)
 
 	taskRepo := model.NewTaskRepository(client)
@@ -229,7 +230,7 @@ func TestDatastoreListTask(t *testing.T) {
 		}
 	}()
 
-	now := time.Unix(0, time.Now().UnixNano())
+	now := dynamodbattribute.UnixTime(time.Unix(0, time.Now().UnixNano()))
 	desc := "Hello, World!"
 
 	tks := make([]*model.Task, 0)
@@ -295,21 +296,21 @@ func TestDatastoreListTask(t *testing.T) {
 	})
 }
 
-func TestDatastoreListNameWithIndexes(t *testing.T) {
+func TestDynamoDBListNameWithRangeKey(t *testing.T) {
 	client := initDynamoClient(t)
 
 	nameRepo := model.NewNameRepository(client)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	var ids []int64
+	pairs := make(map[int64]int)
 	defer func() {
 		defer cancel()
-		if err := nameRepo.DeleteMultiByIDs(ctx, ids); err != nil {
+		if err := nameRepo.DeleteMultiByPairs(ctx, pairs); err != nil {
 			t.Fatal(err)
 		}
 	}()
 
-	now := time.Unix(0, time.Now().UnixNano())
+	now := dynamodbattribute.UnixTime(time.Unix(0, time.Now().UnixNano()))
 	desc := "Hello, World!"
 
 	tks := make([]*model.Name, 0)
@@ -324,7 +325,7 @@ func TestDatastoreListNameWithIndexes(t *testing.T) {
 			PriceList: []int{1, 2, 3, 4, 5},
 		}
 		tks = append(tks, tk)
-		ids = append(ids, i)
+		pairs[i] = int(i)
 	}
 
 	err := nameRepo.InsertMulti(ctx, tks)
@@ -370,9 +371,26 @@ func TestDatastoreListNameWithIndexes(t *testing.T) {
 			t.Fatal("not match")
 		}
 	})
+
+	t.Run("time.Time&int(1件)", func(t *testing.T) {
+		var tasks []*model.Name
+
+		err := nameRepo.List("created", now).
+			Index("created-index").
+			Filter("'count' = ?", 1).
+			AllWithContext(ctx, &tasks)
+
+		if err != nil {
+			t.Fatalf("%+v", err)
+		}
+
+		if len(tasks) != 1 {
+			t.Fatal("not match")
+		}
+	})
 }
 
-func TestDatastore(t *testing.T) {
+func TestDynamoDB(t *testing.T) {
 	client := initDynamoClient(t)
 
 	taskRepo := model.NewTaskRepository(client)
@@ -380,7 +398,7 @@ func TestDatastore(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	now := time.Unix(time.Now().Unix(), 0)
+	now := dynamodbattribute.UnixTime(time.Unix(time.Now().Unix(), 0))
 	desc := "hello"
 
 	id := int64(1234)

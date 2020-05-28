@@ -107,7 +107,7 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 		pos := fs.Position(field.Pos()).String()
 
 		typeName := getTypeName(field.Type)
-		if !cont.Contains(supportType, typeName) {
+		if !(cont.Contains(supportType, typeName) || strings.HasSuffix(typeName, ".UnixTime")) {
 			log.Printf(
 				"%s: the type of `%s` is an invalid type in struct `%s` [%s]\n",
 				pos, name, gen.StructName, typeName,
@@ -152,9 +152,10 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 				return xerrors.Errorf("tag validator failed: %w", err)
 			}
 			if len(sp) == 1 {
-				fieldInfo.DynamoTag = sp[0]
+				if sp[0] != "" {
+					fieldInfo.DynamoTag = sp[0]
+				}
 				gen.FieldInfos = append(gen.FieldInfos, fieldInfo)
-
 				continue
 			} else {
 				if err := keyFieldHandle(gen, sp[0], sp[1], name, typeName, pos); err != nil {
