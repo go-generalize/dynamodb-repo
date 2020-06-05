@@ -3,7 +3,6 @@ package model
 import dda "github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 
 //go:generate dynamodb-repo Task
-//go:generate gofmt -w ./
 
 // Task RangeKeyなし
 type Task struct {

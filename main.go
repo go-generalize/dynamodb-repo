@@ -157,9 +157,13 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 				}
 				gen.FieldInfos = append(gen.FieldInfos, fieldInfo)
 				continue
-			} else {
-				if err := keyFieldHandle(gen, sp[0], sp[1], name, typeName, pos); err != nil {
-					return xerrors.Errorf("error in keyFieldHandle: %w", err)
+			}
+			if err := keyFieldHandle(gen, sp[0], sp[1], name, typeName, pos); err != nil {
+				return xerrors.Errorf("error in keyFieldHandle: %w", err)
+			}
+			if gen.HashKeyFieldName != "" {
+				if _, err := tags.Get("auto"); err == nil {
+					gen.AutoGeneration = true
 				}
 			}
 		}
