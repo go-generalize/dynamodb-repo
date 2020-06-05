@@ -56,6 +56,7 @@ type generator struct {
 
 	FieldInfos []*FieldInfo
 
+	AutoGeneration      bool
 	BoolCriteriaCnt     int
 	FieldInfoForIndexes *FieldInfo
 	SliceExist          bool
@@ -136,6 +137,18 @@ func (g *generator) setFuncMap() template.FuncMap {
 			}
 			return ""
 		},
+		"RangeKeyValueCheckForInsert": func() string {
+			if g.RangeKeyFieldName != "" {
+				return fmt.Sprintf("subject.%s, subject.%s", g.HashKeyFieldName, g.RangeKeyFieldName)
+			}
+			return "subject." + g.HashKeyFieldName
+		},
+		"RangeKeyValueCheckForInsertFmt": func() string {
+			if g.RangeKeyFieldName != "" {
+				return ", range: %s"
+			}
+			return ""
+		},
 		"RangeKeyDelivery": func() string {
 			if g.RangeKeyFieldName != "" {
 				return fmt.Sprintf(", subject.%s", g.RangeKeyFieldName)
@@ -177,6 +190,17 @@ func (g *generator) setFuncMap() template.FuncMap {
 				return "Pair"
 			}
 			return g.HashKeyFieldName
+		},
+		"GenerationKey": func() string {
+			switch g.HashKeyFieldType {
+			case typeString:
+				return "uuid.New().String()"
+			case typeInt:
+				return "int(uuid.New().ID())"
+			case typeInt64:
+				return "int64(uuid.New().ID())"
+			}
+			return ""
 		},
 	}
 }

@@ -8,7 +8,11 @@ import (
 	"{{ .Name }}"
 {{- end }}
 
+{{ if eq .AutoGeneration true }}
+	"github.com/google/uuid"
+{{- end }}
 	"github.com/guregu/dynamo"
+	"golang.org/x/xerrors"
 )
 {{ $generate := "go:generate" }}
 //{{ $generate }} mockgen -source {{ .GeneratedFileName }}.go -destination mock/mock_{{ .GeneratedFileName }}/mock_{{ .GeneratedFileName }}.go
@@ -79,13 +83,27 @@ func (repo *{{ .RepositoryStructName }}) Scan() *dynamo.Scan {
 func (repo *{{ .RepositoryStructName }}) Get(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ RangeKeyArgCheck }}) (*{{ .StructName }}, error) {
 	subject := new({{ .StructName }})
 	if err := repo.table.Get("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ RangeKeyValueCheckForGet }}.OneWithContext(ctx, &subject); err != nil {
-		return nil, err
+		return nil, xerrors.Errorf("error in Get method: %w", err)
 	}
 	return subject, nil
 }
 
 // Insert 処理中の {{ .StructName }} の登録処理一切の責任を持ち、これを行う
 func (repo *{{ .RepositoryStructName }}) Insert(ctx context.Context, subject *{{ .StructName }}) error {
+{{- if eq .AutoGeneration true }}
+	subject.{{ .HashKeyFieldName }} = {{ GenerationKey }}
+{{- else }}
+{{- if eq .HashKeyFieldType "string" }}
+	if subject.{{ .HashKeyFieldName }} == "" {
+{{- else }}
+	if subject.{{ .HashKeyFieldName }} == 0 {
+{{- end }}
+		return xerrors.New("{{ .HashKeyFieldName }} is required")
+	}
+	if _, err := repo.Get(ctx, {{ RangeKeyValueCheckForInsert }}); err == nil {
+		return xerrors.Errorf("already exist [hash: %s{{ RangeKeyValueCheckForInsertFmt }}]", {{ RangeKeyValueCheckForInsert }})
+	}
+{{- end }}
 	return repo.table.Put(subject).RunWithContext(ctx)
 }
 
@@ -93,7 +111,7 @@ func (repo *{{ .RepositoryStructName }}) Insert(ctx context.Context, subject *{{
 func (repo *{{ .RepositoryStructName }}) Update(ctx context.Context, subject *{{ .StructName }}) (err error) {
 	old, err := repo.Get(ctx, subject.{{ .HashKeyFieldName }}{{ RangeKeyDelivery }})
 	if err != nil {
-		return err
+		return xerrors.Errorf("error in Get method: %w", err)
 	}
 
 	updated := map[string]interface{}{}
@@ -144,7 +162,7 @@ func (repo *{{ .RepositoryStructName }}) GetMulti(ctx context.Context, {{ RangeK
 	for {{ RangeKeyForTerms }} {
 		subject, err := repo.Get(ctx, {{ RangeKeyForValue }})
 		if err != nil {
-			return nil, err
+			return nil, xerrors.Errorf("error in Get method: %w", err)
 		}
 		subjects = append(subjects, subject)
 	}
@@ -155,6 +173,20 @@ func (repo *{{ .RepositoryStructName }}) GetMulti(ctx context.Context, {{ RangeK
 func (repo *{{ .RepositoryStructName }}) InsertMulti(ctx context.Context, subjects []*{{ .StructName }}) error {
 	tx := repo.db.WriteTx()
 	for _, subject := range subjects {
+{{- if eq .AutoGeneration true }}
+		subject.{{ .HashKeyFieldName }} = {{ GenerationKey }}
+{{- else }}
+{{- if eq .HashKeyFieldType "string" }}
+		if subject.{{ .HashKeyFieldName }} == "" {
+{{- else }}
+		if subject.{{ .HashKeyFieldName }} == 0 {
+{{- end }}
+			return xerrors.New("{{ .HashKeyFieldName }} is required")
+		}
+		if _, err := repo.Get(ctx, {{ RangeKeyValueCheckForInsert }}); err == nil {
+			return xerrors.Errorf("already exist [hash: %s{{ RangeKeyValueCheckForInsertFmt }}]", {{ RangeKeyValueCheckForInsert }})
+		}
+{{- end }}
 		tx.Put(repo.table.Put(subject))
 	}
 	return tx.RunWithContext(ctx)
