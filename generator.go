@@ -40,6 +40,7 @@ type generator struct {
 	GeneratedFileName string
 	FileName          string
 	StructName        string
+	TableName         string
 
 	RepositoryStructName    string
 	RepositoryInterfaceName string
