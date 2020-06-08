@@ -35,11 +35,11 @@ func TestGenerator(t *testing.T) {
 		// t.Logだと通常テスト時に出力されない & verboseモードでもt.Logだと改行されてしまう
 		// 以上により `fmt.Print` を採用
 		fmt.Print("Failure pattern -> ")
-		if err := run("Task"); err != nil {
+		if err := run("Task", "Prefix"); err != nil {
 			tr.Fatalf("failed to generate for testfiles/a: %+v", err)
 		}
 
-		if err := run("Name"); err != nil {
+		if err := run("Name", ""); err != nil {
 			tr.Fatalf("failed to generate for testfiles/a: %+v", err)
 		}
 

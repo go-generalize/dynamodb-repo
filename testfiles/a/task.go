@@ -2,7 +2,7 @@ package model
 
 import dda "github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 
-//go:generate dynamodb-repo Task
+//go:generate dynamodb-repo -prefix=Prefix Task
 
 // Task RangeKeyなし
 type Task struct {

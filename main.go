@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -24,18 +25,24 @@ func init() {
 }
 
 func main() {
-	l := len(os.Args)
-	if l < 2 {
+	var (
+		prefix = flag.String("prefix", "", "Prefix for table name")
+	)
+	flag.Parse()
+
+	l := flag.NArg()
+
+	if l < 1 {
 		fmt.Println("You have to specify the struct name of target")
 		os.Exit(1)
 	}
 
-	if err := run(os.Args[1]); err != nil {
+	if err := run(flag.Arg(0), *prefix); err != nil {
 		log.Fatal(err.Error())
 	}
 }
 
-func run(structName string) error {
+func run(structName, prefix string) error {
 	fs := token.NewFileSet()
 	pkgs, err := parser.ParseDir(fs, ".", nil, parser.AllErrors)
 
@@ -48,13 +55,13 @@ func run(structName string) error {
 			continue
 		}
 
-		return traverse(v, fs, structName)
+		return traverse(v, fs, structName, prefix)
 	}
 
 	return nil
 }
 
-func traverse(pkg *ast.Package, fs *token.FileSet, structName string) error {
+func traverse(pkg *ast.Package, fs *token.FileSet, structName, prefix string) error {
 	gen := &generator{PackageName: pkg.Name}
 	for name, file := range pkg.Files {
 		gen.FileName = strings.TrimSuffix(filepath.Base(name), ".go")
@@ -87,6 +94,7 @@ func traverse(pkg *ast.Package, fs *token.FileSet, structName string) error {
 					continue
 				}
 				gen.StructName = name
+				gen.TableName = prefix + name
 
 				return generate(gen, fs, structType)
 			}
