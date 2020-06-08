@@ -48,7 +48,7 @@ type {{ .RepositoryStructName }} struct {
 func New{{ .RepositoryInterfaceName }}(db *dynamo.DB) {{ .RepositoryInterfaceName }} {
 	return &{{ .RepositoryStructName }}{
 		db:    db,
-		table: db.Table("{{ .StructName }}"),
+		table: db.Table("{{ .TableName }}"),
 	}
 }
 

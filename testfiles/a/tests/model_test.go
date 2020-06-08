@@ -92,7 +92,7 @@ func initDynamoClient(t *testing.T) *dynamo.DB {
 	})
 
 	createTable(t, "Name", model.NameSchema)
-	createTable(t, "Task", model.TaskSchema)
+	createTable(t, "PrefixTask", model.TaskSchema)
 
 	return client
 }

@@ -128,7 +128,7 @@ const TaskSchema = `
 			"AttributeType": "N"
 		}
 	],
-	"TableName": "Task",
+	"TableName": "PrefixTask",
 	"KeySchema": [
 		{
 			"AttributeName": "id",
