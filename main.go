@@ -12,17 +12,8 @@ import (
 	"strings"
 
 	"github.com/fatih/structtag"
-	"github.com/go-utils/cont"
 	"golang.org/x/xerrors"
 )
-
-func init() {
-	for _, x := range supportType {
-		if x != typeTime {
-			supportType = append(supportType, "[]"+x)
-		}
-	}
-}
 
 func main() {
 	var (
@@ -115,13 +106,6 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 		pos := fs.Position(field.Pos()).String()
 
 		typeName := getTypeName(field.Type)
-		if !(cont.Contains(supportType, typeName) || strings.HasSuffix(typeName, ".UnixTime")) {
-			log.Printf(
-				"%s: the type of `%s` is an invalid type in struct `%s` [%s]\n",
-				pos, name, gen.StructName, typeName,
-			)
-			continue
-		}
 
 		if strings.HasPrefix(typeName, "[]") {
 			gen.SliceExist = true

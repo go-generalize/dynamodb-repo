@@ -9,18 +9,7 @@ import (
 	"golang.org/x/xerrors"
 )
 
-var (
-	valueCheck  = regexp.MustCompile("^[a-zA-Z_][0-9a-zA-Z_]*$")
-	supportType = []string{
-		typeBool,
-		typeString,
-		typeInt,
-		typeInt64,
-		typeFloat32,
-		typeFloat64,
-		typeTime,
-	}
-)
+var valueCheck = regexp.MustCompile("^[a-zA-Z_][0-9a-zA-Z_]*$")
 
 func getFileContents(name string) string {
 	fp, err := statikFS.Open("/" + name + ".go.tmpl")
