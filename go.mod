@@ -5,7 +5,6 @@ go 1.12
 require (
 	github.com/aws/aws-sdk-go v1.30.24
 	github.com/fatih/structtag v1.2.0
-	github.com/go-utils/cont v0.1.1
 	github.com/golang/mock v1.4.3
 	github.com/google/uuid v1.1.1
 	github.com/guregu/dynamo v1.7.3
