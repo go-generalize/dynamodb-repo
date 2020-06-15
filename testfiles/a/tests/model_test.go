@@ -344,6 +344,40 @@ func TestDynamoDBListNameWithRangeKey(t *testing.T) {
 		t.Fatalf("%+v", err)
 	}
 
+	t.Run("original struct or slices", func(t *testing.T) {
+		_, err = nameRepo.Get(ctx, 3, 3)
+
+		if err != nil {
+			t.Fatalf("%+v", err)
+		}
+
+		i := int64(3)
+
+		err := nameRepo.Update(ctx, &model.Name{
+			ID:        i,
+			Created:   now,
+			Desc:      fmt.Sprintf("%s%d", desc, i),
+			Desc2:     fmt.Sprintf("%s%d", desc, i),
+			Done:      true,
+			Count:     int(i),
+			PriceList: []int{1, 2, 3, 4, 5},
+			Value: model.CustomStruct{
+				Value: int(i),
+				Str:   strconv.FormatInt(i*2, 10),
+			},
+			Array: []*model.CustomStruct{
+				{
+					Value: int(i * 2),
+					Str:   strconv.FormatInt(i, 10),
+				},
+			},
+		})
+
+		if err != nil {
+			t.Fatalf("failed to update custom struct: %+v", err)
+		}
+	})
+
 	t.Run("int(1件)", func(t *testing.T) {
 		var tasks []*model.Name
 
@@ -397,34 +431,6 @@ func TestDynamoDBListNameWithRangeKey(t *testing.T) {
 
 		if len(tasks) != 1 {
 			t.Fatal("not match")
-		}
-	})
-
-	t.Run("original struct or slices", func(t *testing.T) {
-		i := int64(3)
-
-		err := nameRepo.Update(ctx, &model.Name{
-			ID:        i,
-			Created:   now,
-			Desc:      fmt.Sprintf("%s%d", desc, i),
-			Desc2:     fmt.Sprintf("%s%d", desc, i),
-			Done:      true,
-			Count:     int(i),
-			PriceList: []int{1, 2, 3, 4, 5},
-			Value: model.CustomStruct{
-				Value: int(i),
-				Str:   strconv.FormatInt(i*2, 10),
-			},
-			Array: []*model.CustomStruct{
-				{
-					Value: int(i * 2),
-					Str:   strconv.FormatInt(i, 10),
-				},
-			},
-		})
-
-		if err != nil {
-			t.Fatalf("failed to update custom struct: %+v", err)
 		}
 	})
 }
