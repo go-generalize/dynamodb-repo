@@ -125,14 +125,9 @@ func (repo *{{ .RepositoryStructName }}) Update(ctx context.Context, subject *{{
 		return ErrNoDifference
 	}
 
-	q := repo.table.Update(repo.hashPair(subject))
+	q := repo.table.Update(repo.hashPair(subject)){{ RangeKeyValueCheckForDelete }}
 	for path, v := range updated {
-		switch reflect.ValueOf(v).Kind() {
-		case reflect.Array, reflect.Slice:
-			q = q.SetSet(path, v)
-		default:
-			q = q.Set(path, v)
-		}
+		q = q.Set(path, v)
 	}
 
 	return q.RunWithContext(ctx)
@@ -140,7 +135,7 @@ func (repo *{{ .RepositoryStructName }}) Update(ctx context.Context, subject *{{
 
 // ForceUpdate 処理中の {{ .StructName }} の更新処理一切の責任を持ち、これを行う
 func (repo *{{ .RepositoryStructName }}) ForceUpdate(ctx context.Context, subject *{{ .StructName }}) error {
-	u := repo.table.Update(repo.hashPair(subject)).
+	u := repo.table.Update(repo.hashPair(subject)){{ RangeKeyValueCheckForDelete }}.
 {{- range $i, $fi := .FieldInfos }}
 		Set("{{ $fi.DynamoTag }}", subject.{{ $fi.Field }}){{ HasColon $i $.FieldInfos }}
 {{- end }}

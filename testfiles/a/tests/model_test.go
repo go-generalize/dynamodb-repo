@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -304,6 +305,7 @@ func TestDynamoDBListNameWithRangeKey(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	pairs := make(map[int64]int)
 	defer func() {
+		return
 		defer cancel()
 		if err := nameRepo.DeleteMultiByPairs(ctx, pairs); err != nil {
 			t.Fatal(err)
@@ -323,6 +325,12 @@ func TestDynamoDBListNameWithRangeKey(t *testing.T) {
 			Done:      true,
 			Count:     int(i),
 			PriceList: []int{1, 2, 3, 4, 5},
+			Array: []*model.CustomStruct{
+				{
+					Value: int(i),
+					Str:   strconv.FormatInt(i, 10),
+				},
+			},
 		}
 		tks = append(tks, tk)
 		pairs[i] = int(i)
@@ -332,6 +340,40 @@ func TestDynamoDBListNameWithRangeKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%+v", err)
 	}
+
+	t.Run("original struct or slices", func(t *testing.T) {
+		var tasks []*model.Name
+		err := nameRepo.List("count", 3).Index("count-index").AllWithContext(ctx, &tasks)
+		if err != nil {
+			t.Fatalf("%+v", err)
+		}
+
+		if len(tasks) != 1 {
+			t.Fatal("not match")
+		}
+
+		i := int64(3)
+
+		err = nameRepo.Update(ctx, &model.Name{
+			ID:        tasks[0].ID,
+			Created:   now,
+			Desc:      fmt.Sprintf("%s%d", desc, i),
+			Desc2:     fmt.Sprintf("%s%d", desc, i),
+			Done:      true,
+			Count:     int(i),
+			PriceList: []int{1, 2, 3, 4, 5, 6, 7},
+			Array: []*model.CustomStruct{
+				{
+					Value: int(i * 2),
+					Str:   strconv.FormatInt(i, 10),
+				},
+			},
+		})
+
+		if err != nil {
+			t.Fatalf("failed to update custom struct: %+v", err)
+		}
+	})
 
 	t.Run("int(1件)", func(t *testing.T) {
 		var tasks []*model.Name
