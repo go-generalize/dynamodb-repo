@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -323,6 +324,20 @@ func TestDynamoDBListNameWithRangeKey(t *testing.T) {
 			Done:      true,
 			Count:     int(i),
 			PriceList: []int{1, 2, 3, 4, 5},
+			Value: model.CustomStruct{
+				Value: int(i),
+				Str:   strconv.FormatInt(i, 10),
+			},
+			NullableValue: &model.CustomStruct{
+				Value: int(i),
+				Str:   strconv.FormatInt(i, 10),
+			},
+			Array: []*model.CustomStruct{
+				{
+					Value: int(i),
+					Str:   strconv.FormatInt(i, 10),
+				},
+			},
 		}
 		tks = append(tks, tk)
 		pairs[i] = int(i)
@@ -386,6 +401,63 @@ func TestDynamoDBListNameWithRangeKey(t *testing.T) {
 
 		if len(tasks) != 1 {
 			t.Fatal("not match")
+		}
+	})
+
+	t.Run("custom struct or slices", func(t *testing.T) {
+		i := int64(3)
+
+		err := nameRepo.Update(ctx, &model.Name{
+			ID:        i,
+			Created:   now,
+			Desc:      fmt.Sprintf("%s%d", desc, i),
+			Desc2:     fmt.Sprintf("%s%d", desc, i),
+			Done:      true,
+			Count:     int(i),
+			PriceList: []int{1, 2, 3, 4, 5},
+			Value: model.CustomStruct{
+				Value: int(i),
+				Str:   strconv.FormatInt(i*2, 10),
+			},
+			NullableValue: &model.CustomStruct{
+				Value: int(i),
+				Str:   strconv.FormatInt(i*2, 10),
+			},
+			Array: []*model.CustomStruct{
+				{
+					Value: int(i * 2),
+					Str:   strconv.FormatInt(i, 10),
+				},
+			},
+		})
+
+		if err != nil {
+			t.Fatalf("failed to update custom struct: %+v", err)
+		}
+
+		err = nameRepo.Update(ctx, &model.Name{
+			ID:        i,
+			Created:   now,
+			Desc:      fmt.Sprintf("%s%d", desc, i),
+			Desc2:     fmt.Sprintf("%s%d", desc, i),
+			Done:      true,
+			Count:     int(i),
+			PriceList: []int{1, 2, 3, 4, 5},
+			Value: model.CustomStruct{
+				Value: int(i),
+				Str:   strconv.FormatInt(i*2, 10),
+			},
+			NullableValue: nil,
+			Array: []*model.CustomStruct{
+				{
+					Value: int(i * 2),
+					Str:   strconv.FormatInt(i, 10),
+				},
+			},
+		})
+
+		if err != nil {
+			t.Fatalf("failed to update nullable value to nil: %+v", err)
 		}
 	})
 }
