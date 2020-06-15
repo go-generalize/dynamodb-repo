@@ -361,7 +361,7 @@ func TestDynamoDBListNameWithRangeKey(t *testing.T) {
 			Desc2:     fmt.Sprintf("%s%d", desc, i),
 			Done:      true,
 			Count:     int(i),
-			PriceList: []int{1, 2, 3, 4, 5},
+			PriceList: []int{1, 2, 3, 4, 5, 6, 7},
 			Array: []*model.CustomStruct{
 				{
 					Value: int(i * 2),
