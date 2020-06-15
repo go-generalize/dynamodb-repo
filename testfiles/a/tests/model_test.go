@@ -305,6 +305,7 @@ func TestDynamoDBListNameWithRangeKey(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	pairs := make(map[int64]int)
 	defer func() {
+		return
 		defer cancel()
 		if err := nameRepo.DeleteMultiByPairs(ctx, pairs); err != nil {
 			t.Fatal(err)
@@ -324,10 +325,6 @@ func TestDynamoDBListNameWithRangeKey(t *testing.T) {
 			Done:      true,
 			Count:     int(i),
 			PriceList: []int{1, 2, 3, 4, 5},
-			Value: model.CustomStruct{
-				Value: int(i),
-				Str:   strconv.FormatInt(i, 10),
-			},
 			Array: []*model.CustomStruct{
 				{
 					Value: int(i),
@@ -345,26 +342,26 @@ func TestDynamoDBListNameWithRangeKey(t *testing.T) {
 	}
 
 	t.Run("original struct or slices", func(t *testing.T) {
-		_, err = nameRepo.Get(ctx, 3, 3)
-
+		var tasks []*model.Name
+		err := nameRepo.List("count", 3).Index("count-index").AllWithContext(ctx, &tasks)
 		if err != nil {
 			t.Fatalf("%+v", err)
 		}
 
+		if len(tasks) != 1 {
+			t.Fatal("not match")
+		}
+
 		i := int64(3)
 
-		err := nameRepo.Update(ctx, &model.Name{
-			ID:        i,
+		err = nameRepo.Update(ctx, &model.Name{
+			ID:        tasks[0].ID,
 			Created:   now,
 			Desc:      fmt.Sprintf("%s%d", desc, i),
 			Desc2:     fmt.Sprintf("%s%d", desc, i),
 			Done:      true,
 			Count:     int(i),
 			PriceList: []int{1, 2, 3, 4, 5},
-			Value: model.CustomStruct{
-				Value: int(i),
-				Str:   strconv.FormatInt(i*2, 10),
-			},
 			Array: []*model.CustomStruct{
 				{
 					Value: int(i * 2),

@@ -18,6 +18,5 @@ type Name struct {
 	Desc2     string          `dynamo:"description2"`
 	Done      bool            `dynamo:"done"`
 	PriceList []int           `dynamo:"priceList"`
-	Value     CustomStruct    `dynamo:"custom"`
 	Array     []*CustomStruct `dynamo:"customs"`
 }
