@@ -11,14 +11,13 @@ type CustomStruct struct {
 
 // Name RangeKeyあり
 type Name struct {
-	ID            int64           `dynamo:"id,hash" auto:""`
-	Count         int             `dynamo:"count,range"`
-	Created       dda.UnixTime    `dynamo:"created"`
-	Desc          string          `dynamo:"description"`
-	Desc2         string          `dynamo:"description2"`
-	Done          bool            `dynamo:"done"`
-	PriceList     []int           `dynamo:"priceList"`
-	Value         CustomStruct    `dynamo:"custom"`
-	NullableValue *CustomStruct   `dynamo:"custom_nullable"`
-	Array         []*CustomStruct `dynamo:"customs"`
+	ID        int64           `dynamo:"id,hash" auto:""`
+	Count     int             `dynamo:"count,range"`
+	Created   dda.UnixTime    `dynamo:"created"`
+	Desc      string          `dynamo:"description"`
+	Desc2     string          `dynamo:"description2"`
+	Done      bool            `dynamo:"done"`
+	PriceList []int           `dynamo:"priceList"`
+	Value     CustomStruct    `dynamo:"custom"`
+	Array     []*CustomStruct `dynamo:"customs"`
 }
