@@ -15,7 +15,9 @@ type Task struct {
 	Count64    int64        `dynamo:"count64"`
 	NameList   []string     `dynamo:"nameList"`
 	Proportion float64      `dynamo:"proportion"`
-	Flag       Flag         `dynamo:"flag"` // NG
+	Flag       Flag         `dynamo:"flag"`
+	CreatedAt  dda.UnixTime `dynamo:"createdAt"`
+	UpdatedAt  dda.UnixTime `dynamo:"updatedAt"`
 }
 
 type Flag bool
