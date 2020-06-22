@@ -4,11 +4,16 @@ package {{ .PackageName }}
 import (
 	"context"
 	"reflect"
+{{- if or ( eq .EnableCreateTime true ) ( eq .EnableUpdateTime true )}}
+	"time"
+{{- end }}
 {{- range .ImportList }}
 	"{{ .Name }}"
 {{- end }}
-
-{{ if eq .AutoGeneration true }}
+{{ if eq .EnableDDA true }}
+	dda "github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
+{{- end }}
+{{- if eq .AutoGeneration true }}
 	"github.com/google/uuid"
 {{- end }}
 	"github.com/guregu/dynamo"
@@ -104,6 +109,12 @@ func (repo *{{ .RepositoryStructName }}) Insert(ctx context.Context, subject *{{
 		return xerrors.Errorf("already exist [hash: %s{{ RangeKeyValueCheckForInsertFmt }}]", {{ RangeKeyValueCheckForInsert }})
 	}
 {{- end }}
+{{- if eq .EnableCreateTime true }}
+	subject.{{ .CreateTimeName }} = {{ Now .CreateTimeType }}
+{{- end }}
+{{- if eq .EnableUpdateTime true }}
+	subject.{{ .UpdateTimeName }} = {{ Now .UpdateTimeType }}
+{{- end }}
 	return repo.table.Put(subject).RunWithContext(ctx)
 }
 
@@ -115,10 +126,15 @@ func (repo *{{ .RepositoryStructName }}) Update(ctx context.Context, subject *{{
 	}
 
 	updated := map[string]interface{}{}
+{{- $created := .CreateTimeName }}
+{{- $updated := .UpdateTimeName }}
 {{- range $i, $fi := .FieldInfos }}
+{{- if and ( ne $fi.Field $created ) ( ne $fi.Field $updated )}}
 	if !reflect.DeepEqual(old.{{$fi.Field}}, subject.{{$fi.Field}}) {
 		updated["{{$fi.DynamoTag}}"] = subject.{{$fi.Field}}
 	}
+
+{{- end }}
 {{- end }}
 
 	if len(updated) == 0 {
@@ -130,6 +146,10 @@ func (repo *{{ .RepositoryStructName }}) Update(ctx context.Context, subject *{{
 		q = q.Set(path, v)
 	}
 
+{{- if eq .EnableUpdateTime true }}
+	q = q.Set("{{ .UpdateTimeDynamoTag }}", {{ Now .UpdateTimeType }})
+{{- end }}
+
 	return q.RunWithContext(ctx)
 }
 
@@ -137,7 +157,12 @@ func (repo *{{ .RepositoryStructName }}) Update(ctx context.Context, subject *{{
 func (repo *{{ .RepositoryStructName }}) ForceUpdate(ctx context.Context, subject *{{ .StructName }}) error {
 	u := repo.table.Update(repo.hashPair(subject)){{ RangeKeyValueCheckForDelete }}.
 {{- range $i, $fi := .FieldInfos }}
+{{- if and ( ne $fi.Field $created ) ( ne $fi.Field $updated )}}
 		Set("{{ $fi.DynamoTag }}", subject.{{ $fi.Field }}){{ HasColon $i $.FieldInfos }}
+{{- end }}
+{{- end }}
+{{- if eq .EnableUpdateTime true }}
+		Set("{{ .UpdateTimeDynamoTag }}", {{ Now .UpdateTimeType }})
 {{- end }}
 	return u.RunWithContext(ctx)
 }
@@ -179,8 +204,14 @@ func (repo *{{ .RepositoryStructName }}) InsertMulti(ctx context.Context, subjec
 			return xerrors.New("{{ .HashKeyFieldName }} is required")
 		}
 		if _, err := repo.Get(ctx, {{ RangeKeyValueCheckForInsert }}); err == nil {
-			return xerrors.Errorf("already exist [hash: %s{{ RangeKeyValueCheckForInsertFmt }}]", {{ RangeKeyValueCheckForInsert }})
+			return xerrors.Errorf("already exist [hash: %v{{ RangeKeyValueCheckForInsertFmt }}]", {{ RangeKeyValueCheckForInsert }})
 		}
+{{- end }}
+{{- if eq .EnableCreateTime true }}
+		subject.{{ .CreateTimeName }} = {{ Now .CreateTimeType }}
+{{- end }}
+{{- if eq .EnableUpdateTime true }}
+		subject.{{ .UpdateTimeName }} = {{ Now .UpdateTimeType }}
 {{- end }}
 		tx.Put(repo.table.Put(subject))
 	}
@@ -196,7 +227,12 @@ func (repo *{{ .RepositoryStructName }}) UpdateMulti(ctx context.Context, subjec
 			Range("{{ .RangeKeyFieldTagName }}", subject.{{ .RangeKeyFieldName }}).
 {{- end }}
 {{- range $i, $fi := .FieldInfos }}
+{{- if and ( ne $fi.Field $created ) ( ne $fi.Field $updated )}}
 			Set("{{ $fi.DynamoTag }}", subject.{{ $fi.Field }}){{ HasColon $i $.FieldInfos }}
+{{- end }}
+{{- end }}
+{{- if eq .EnableUpdateTime true }}
+			Set("{{ .UpdateTimeDynamoTag }}", {{ Now .UpdateTimeType }})
 {{- end }}
 		tx.Update(u)
 	}

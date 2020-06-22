@@ -3,7 +3,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,9 +31,6 @@ func TestGenerator(t *testing.T) {
 			tr.Fatalf("chdir failed: %+v", err)
 		}
 
-		// t.Logだと通常テスト時に出力されない & verboseモードでもt.Logだと改行されてしまう
-		// 以上により `fmt.Print` を採用
-		fmt.Print("Failure pattern -> ")
 		if err := run("Task", "Prefix"); err != nil {
 			tr.Fatalf("failed to generate for testfiles/a: %+v", err)
 		}
