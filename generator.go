@@ -69,6 +69,7 @@ type generator struct {
 	UpdateTimeName      string
 	UpdateTimeDynamoTag string
 	UpdateTimeType      string
+	EnableDDA           bool
 }
 
 func (g *generator) setting() {

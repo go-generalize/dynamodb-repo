@@ -10,7 +10,7 @@ import (
 {{- range .ImportList }}
 	"{{ .Name }}"
 {{- end }}
-{{ if or ( eq .EnableCreateTime true ) ( eq .EnableUpdateTime true )}}
+{{ if eq .EnableDDA true }}
 	dda "github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 {{- end }}
 {{- if eq .AutoGeneration true }}

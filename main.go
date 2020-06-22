@@ -181,6 +181,12 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 		if !(gen.EnableCreateTime && gen.EnableUpdateTime) {
 			return xerrors.New("requires both CreatedAt and UpdatedAt")
 		}
+		if gen.CreateTimeType != gen.UpdateTimeType {
+			return xerrors.Errorf("the type is different")
+		}
+		if strings.HasSuffix(gen.CreateTimeType, ".UnixTime") {
+			gen.EnableDDA = true
+		}
 	}
 
 	{
