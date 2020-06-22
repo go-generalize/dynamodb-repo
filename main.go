@@ -108,7 +108,7 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 		typeName := getTypeName(field.Type)
 
 		switch name {
-		case "CreatedAt", "CreateTime":
+		case CreatedAt, CreateTime:
 			gen.EnableCreateTime = true
 			gen.CreateTimeName = name
 			gen.CreateTimeType = typeName
