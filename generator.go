@@ -61,6 +61,14 @@ type generator struct {
 	BoolCriteriaCnt     int
 	FieldInfoForIndexes *FieldInfo
 	SliceExist          bool
+
+	EnableCreateTime    bool
+	CreateTimeName      string
+	CreateTimeType      string
+	EnableUpdateTime    bool
+	UpdateTimeName      string
+	UpdateTimeDynamoTag string
+	UpdateTimeType      string
 }
 
 func (g *generator) setting() {
@@ -146,7 +154,7 @@ func (g *generator) setFuncMap() template.FuncMap {
 		},
 		"RangeKeyValueCheckForInsertFmt": func() string {
 			if g.RangeKeyFieldName != "" {
-				return ", range: %s"
+				return ", range: %v"
 			}
 			return ""
 		},
@@ -202,6 +210,12 @@ func (g *generator) setFuncMap() template.FuncMap {
 				return "int64(uuid.New().ID())"
 			}
 			return ""
+		},
+		"Now": func(typeName string) string {
+			if strings.HasSuffix(typeName, ".UnixTime") {
+				return "dda.UnixTime(time.Now())"
+			}
+			return "time.Now()"
 		},
 	}
 }

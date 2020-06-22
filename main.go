@@ -107,6 +107,18 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 
 		typeName := getTypeName(field.Type)
 
+		switch name {
+		case "CreatedAt", "CreateTime":
+			gen.EnableCreateTime = true
+			gen.CreateTimeName = name
+			gen.CreateTimeType = typeName
+		case UpdatedAt, UpdateTime:
+			gen.EnableUpdateTime = true
+			gen.UpdateTimeName = name
+			gen.UpdateTimeDynamoTag = name
+			gen.UpdateTimeType = typeName
+		}
+
 		if strings.HasPrefix(typeName, "[]") {
 			gen.SliceExist = true
 		}
@@ -146,6 +158,10 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 			if len(sp) == 1 {
 				if sp[0] != "" {
 					fieldInfo.DynamoTag = sp[0]
+					switch name {
+					case UpdatedAt, UpdateTime:
+						gen.UpdateTimeDynamoTag = sp[0]
+					}
 				}
 				gen.FieldInfos = append(gen.FieldInfos, fieldInfo)
 				continue
@@ -158,6 +174,12 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 					gen.AutoGeneration = true
 				}
 			}
+		}
+	}
+
+	if gen.EnableCreateTime || gen.EnableUpdateTime {
+		if !(gen.EnableCreateTime && gen.EnableUpdateTime) {
+			return xerrors.New("requires both CreatedAt and UpdatedAt")
 		}
 	}
 
