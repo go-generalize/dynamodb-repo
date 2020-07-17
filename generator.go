@@ -123,12 +123,6 @@ func (g *generator) setFuncMap() template.FuncMap {
 		"HasPrefixSlice": func(types string) bool {
 			return strings.HasPrefix(types, "[]")
 		},
-		"HasColon": func(idx int, fields []*FieldInfo) string {
-			if (idx + 1) == len(fields) {
-				return ""
-			}
-			return "."
-		},
 		"RangeKeyArgCheck": func() string {
 			if g.RangeKeyFieldName != "" {
 				return fmt.Sprintf(", %s %s", g.RangeKeyValueName, g.RangeKeyFieldType)
