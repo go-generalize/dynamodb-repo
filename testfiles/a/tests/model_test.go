@@ -257,6 +257,38 @@ func TestDynamoDBTask(t *testing.T) {
 			tr.Fatalf("unexpected Count: %d (expected: %d)", tsk.Count, 12)
 		}
 	})
+
+	t.Run("Transaction", func(tr *testing.T) {
+		err = taskRepo.RunInTransaction(ctx, func(tx *dynamo.WriteTx) error {
+			getTx := client.GetTx()
+			task, err := taskRepo.GetWithTx(getTx, 100)
+			if err != nil {
+				tr.Fatalf("%+v", err)
+			}
+			task.Count++
+			if err := taskRepo.UpdateWithTx(tx, task); err != nil {
+				return xerrors.Errorf("error in UpdateWithTx method: %w", err)
+			}
+
+			task.ID = 1002
+			task.Count-- // revert
+			if err := taskRepo.InsertWithTx(tx, task); err != nil {
+				return xerrors.Errorf("error in InsertWithTx method: %w", err)
+			}
+			return nil
+		})
+		if err != nil {
+			tr.Fatalf("%+v", err)
+		}
+
+		tsk, err := taskRepo.Get(ctx, 100)
+		if err != nil {
+			tr.Fatalf("%+v", err)
+		}
+		if tsk.Count != 2 {
+			tr.Fatalf("unexpected Count: %d (expected: %d)", tsk.Count, 2)
+		}
+	})
 }
 
 func TestDynamoDBListNameWithRangeKey(t *testing.T) {
