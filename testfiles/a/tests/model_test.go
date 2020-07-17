@@ -183,6 +183,48 @@ func TestDynamoDBTask(t *testing.T) {
 		}
 	})
 
+	t.Run("List", func(tr *testing.T) {
+		t.Run("int(1件)", func(t *testing.T) {
+			var tasks []*model.Task
+
+			err := taskRepo.List("count", 1).Index("count-index").AllWithContext(ctx, &tasks)
+			if err != nil {
+				t.Fatalf("%+v", err)
+			}
+
+			if len(tasks) != 1 {
+				t.Fatal("not match")
+			}
+		})
+
+		t.Run("float(1件)", func(t *testing.T) {
+			var tasks []*model.Task
+
+			prop := 1.12345
+			err := taskRepo.List("proportion", prop).Index("proportion-index").AllWithContext(ctx, &tasks)
+			if err != nil {
+				t.Fatalf("%+v", err)
+			}
+
+			if len(tasks) != 1 {
+				t.Fatal("not match")
+			}
+		})
+
+		t.Run("time.Time(10件)", func(t *testing.T) {
+			var tasks []*model.Task
+
+			err := taskRepo.List("created", now).Index("created-index").AllWithContext(ctx, &tasks)
+			if err != nil {
+				t.Fatalf("%+v", err)
+			}
+
+			if len(tasks) != 10 {
+				t.Fatal("not match")
+			}
+		})
+	})
+
 	t.Run("Single", func(tr *testing.T) {
 		tk := &model.Task{
 			ID:         1001,
@@ -213,86 +255,6 @@ func TestDynamoDBTask(t *testing.T) {
 
 		if tsk.Count != 12 {
 			tr.Fatalf("unexpected Count: %d (expected: %d)", tsk.Count, 12)
-		}
-	})
-}
-
-func TestDynamoDBListTask(t *testing.T) {
-	client := initDynamoClient(t)
-
-	taskRepo := model.NewTaskRepository(client)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	var ids []int64
-	defer func() {
-		defer cancel()
-		if err := taskRepo.DeleteMultiByIDs(ctx, ids); err != nil {
-			t.Fatal(err)
-		}
-	}()
-
-	now := dynamodbattribute.UnixTime(time.Unix(0, time.Now().UnixNano()))
-	desc := "Hello, World!"
-
-	tks := make([]*model.Task, 0)
-	for i := int64(1); i <= 10; i++ {
-		tk := &model.Task{
-			ID:         i * 100,
-			Desc:       fmt.Sprintf("%s%d", desc, i),
-			Created:    now,
-			Done:       true,
-			Done2:      false,
-			Count:      int(i),
-			Count64:    0,
-			Proportion: 0.12345 + float64(i),
-			Flag:       model.Flag(true),
-			NameList:   []string{"a", "b", "c"},
-		}
-		tks = append(tks, tk)
-		ids = append(ids, tk.ID)
-	}
-	err := taskRepo.InsertMulti(ctx, tks)
-	if err != nil {
-		t.Fatalf("%+v", err)
-	}
-
-	t.Run("int(1件)", func(t *testing.T) {
-		var tasks []*model.Task
-
-		err := taskRepo.List("count", 1).Index("count-index").AllWithContext(ctx, &tasks)
-		if err != nil {
-			t.Fatalf("%+v", err)
-		}
-
-		if len(tasks) != 1 {
-			t.Fatal("not match")
-		}
-	})
-
-	t.Run("float(1件)", func(t *testing.T) {
-		var tasks []*model.Task
-
-		prop := 1.12345
-		err := taskRepo.List("proportion", prop).Index("proportion-index").AllWithContext(ctx, &tasks)
-		if err != nil {
-			t.Fatalf("%+v", err)
-		}
-
-		if len(tasks) != 1 {
-			t.Fatal("not match")
-		}
-	})
-
-	t.Run("time.Time(10件)", func(t *testing.T) {
-		var tasks []*model.Task
-
-		err := taskRepo.List("created", now).Index("created-index").AllWithContext(ctx, &tasks)
-		if err != nil {
-			t.Fatalf("%+v", err)
-		}
-
-		if len(tasks) != 10 {
-			t.Fatal("not match")
 		}
 	})
 }
