@@ -43,6 +43,7 @@ type {{ .RepositoryInterfaceName }} interface {
 	RunInTransaction(ctx context.Context, fn func(tx *dynamo.WriteTx) error) error
 	GetWithTx(tx *dynamo.GetTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ RangeKeyArgCheck }}) (*{{ .StructName }}, error)
 	InsertWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }}) error
+	UpdateWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }}) error
 	ForceUpdateWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }})
 	// misc
 	GetTable() dynamo.Table
@@ -166,16 +167,10 @@ func (repo *{{ .RepositoryStructName }}) InsertWithTx(tx *dynamo.WriteTx, subjec
 	return nil
 }
 
-// Update 処理中の {{ .StructName }} の更新処理一切の責任を持ち、これを行う
-func (repo *{{ .RepositoryStructName }}) Update(ctx context.Context, subject *{{ .StructName }}) (err error) {
-	old, err := repo.Get(ctx, subject.{{ .HashKeyFieldName }}{{ RangeKeyDelivery }})
-	if err != nil {
-		return xerrors.Errorf("error in Get method: %w", err)
-	}
-
+func (repo *{{ .RepositoryStructName }}) updateQuery(old, subject *{{ .StructName }}) *dynamo.Update {
 	updated := map[string]interface{}{}
-{{- $created := .CreateTimeName }}
-{{- $updated := .UpdateTimeName }}
+	{{- $created := .CreateTimeName }}
+	{{- $updated := .UpdateTimeName }}
 {{- range $i, $fi := .FieldInfos }}
 {{- if and ( ne $fi.Field $created ) ( ne $fi.Field $updated )}}
 	if !reflect.DeepEqual(old.{{$fi.Field}}, subject.{{$fi.Field}}) {
@@ -184,21 +179,51 @@ func (repo *{{ .RepositoryStructName }}) Update(ctx context.Context, subject *{{
 
 {{- end }}
 {{- end }}
-
 	if len(updated) == 0 {
-		return ErrNoDifference
+		return nil
 	}
 
-	q := repo.table.Update(repo.hashPair(subject)){{ RangeKeyValueCheckForDelete }}
+	query := repo.table.Update(repo.hashPair(subject)){{ RangeKeyValueCheckForDelete }}
 	for path, v := range updated {
-		q = q.Set(path, v)
+		query.Set(path, v)
 	}
 
 {{- if eq .EnableUpdateTime true }}
-	q = q.Set("{{ .UpdateTimeDynamoTag }}", {{ Now .UpdateTimeType }})
+	query.Set("{{ .UpdateTimeDynamoTag }}", {{ Now .UpdateTimeType }})
 {{- end }}
+	return query.If("attribute_exists($)", "{{ .HashKeyFieldTagName }}")
+}
 
-	return q.RunWithContext(ctx)
+// Update 処理中の {{ .StructName }} の更新処理一切の責任を持ち、これを行う
+func (repo *{{ .RepositoryStructName }}) Update(ctx context.Context, subject *{{ .StructName }}) error {
+	old, err := repo.Get(ctx, subject.{{ .HashKeyFieldName }}{{ RangeKeyDelivery }})
+	if err != nil {
+		return xerrors.Errorf("error in Get method: %w", err)
+	}
+
+	query := repo.updateQuery(old, subject)
+	if query == nil {
+		return ErrNoDifference
+	}
+
+	return query.RunWithContext(ctx)
+}
+
+// UpdateWithTx トランザクション中の {{ .StructName }} の更新処理を行う
+func (repo *{{ .RepositoryStructName }}) UpdateWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }}) error {
+	getTx := repo.db.GetTx()
+	old, err := repo.GetWithTx(getTx, subject.{{ .HashKeyFieldName }}{{ RangeKeyDelivery }})
+	if err != nil {
+		return xerrors.Errorf("error in GetWithTx method: %w", err)
+	}
+
+	query := repo.updateQuery(old, subject)
+	if query == nil {
+		return ErrNoDifference
+	}
+
+	tx.Update(query)
+	return nil
 }
 
 func (repo *{{ .RepositoryStructName }}) forceUpdateQuery(subject *{{ .StructName }}) *dynamo.Update {
