@@ -42,6 +42,7 @@ type {{ .RepositoryInterfaceName }} interface {
 	Scan() *dynamo.Scan
 	// Transaction
 	RunInTransaction(ctx context.Context, fn func(tx *dynamo.WriteTx) error) error
+	InsertWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }}) error
 	ForceUpdateWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }})
 	// misc
 	GetTable() dynamo.Table
@@ -110,6 +111,17 @@ func (repo *taskRepository) RunInTransaction(ctx context.Context, fn func(tx *dy
 	return nil
 }
 
+func (repo *{{ .RepositoryStructName }}) insertQuery(subject *{{ .StructName }}) *dynamo.Put {
+{{- if eq .EnableCreateTime true }}
+	subject.{{ .CreateTimeName }} = {{ Now .CreateTimeType }}
+{{- end }}
+{{- if eq .EnableUpdateTime true }}
+	subject.{{ .UpdateTimeName }} = {{ Now .UpdateTimeType }}
+{{- end }}
+	query := repo.table.Put(subject)
+	return query.If("attribute_not_exists($)", "{{ .HashKeyFieldTagName }}")
+}
+
 // Insert 処理中の {{ .StructName }} の登録処理一切の責任を持ち、これを行う
 func (repo *{{ .RepositoryStructName }}) Insert(ctx context.Context, subject *{{ .StructName }}) error {
 {{- if eq .AutoGeneration true }}
@@ -120,19 +132,27 @@ func (repo *{{ .RepositoryStructName }}) Insert(ctx context.Context, subject *{{
 {{- else }}
 	if subject.{{ .HashKeyFieldName }} == 0 {
 {{- end }}
+{{- end }}
 		return xerrors.New("{{ .HashKeyFieldName }} is required")
 	}
-	if _, err := repo.Get(ctx, {{ RangeKeyValueCheckForInsert }}); err == nil {
-		return xerrors.Errorf("already exist [hash: %s{{ RangeKeyValueCheckForInsertFmt }}]", {{ RangeKeyValueCheckForInsert }})
+	return repo.insertQuery(subject).RunWithContext(ctx)
+}
+
+// InsertWithTx トランザクション中の {{ .StructName }} の登録処理を行う
+func (repo *{{ .RepositoryStructName }}) InsertWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }}) error {
+{{- if eq .AutoGeneration true }}
+	subject.{{ .HashKeyFieldName }} = {{ GenerationKey }}
+{{- else }}
+{{- if eq .HashKeyFieldType "string" }}
+	if subject.{{ .HashKeyFieldName }} == "" {
+{{- else }}
+	if subject.{{ .HashKeyFieldName }} == 0 {
+{{- end }}
+{{- end }}
+		return xerrors.New("{{ .HashKeyFieldName }} is required")
 	}
-{{- end }}
-{{- if eq .EnableCreateTime true }}
-	subject.{{ .CreateTimeName }} = {{ Now .CreateTimeType }}
-{{- end }}
-{{- if eq .EnableUpdateTime true }}
-	subject.{{ .UpdateTimeName }} = {{ Now .UpdateTimeType }}
-{{- end }}
-	return repo.table.Put(subject).RunWithContext(ctx)
+	tx.Put(repo.insertQuery(subject))
+	return nil
 }
 
 // Update 処理中の {{ .StructName }} の更新処理一切の責任を持ち、これを行う
