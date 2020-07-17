@@ -113,7 +113,7 @@ func (repo *{{ .RepositoryStructName }}) GetWithTx(tx *dynamo.GetTx, {{ .HashKey
 }
 
 // RunInTransaction - トランザクション中で処理を行う
-func (repo *taskRepository) RunInTransaction(ctx context.Context, fn func(tx *dynamo.WriteTx) error) error {
+func (repo *{{ .RepositoryStructName }}) RunInTransaction(ctx context.Context, fn func(tx *dynamo.WriteTx) error) error {
 	tx := repo.db.WriteTx()
 	tx.Idempotent(true)
 	if err := fn(tx); err != nil {
