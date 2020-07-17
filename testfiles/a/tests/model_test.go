@@ -118,7 +118,7 @@ func compareTask(t *testing.T, expected, actual *model.Task) {
 	}
 }
 
-func TestDynamoDBTransactionTask(t *testing.T) {
+func TestDynamoDBTask(t *testing.T) {
 	client := initDynamoClient(t)
 
 	taskRepo := model.NewTaskRepository(client)
