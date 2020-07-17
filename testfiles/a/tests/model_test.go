@@ -135,29 +135,29 @@ func TestDynamoDBTask(t *testing.T) {
 	now := dynamodbattribute.UnixTime(time.Unix(0, time.Now().UnixNano()))
 	desc := "Hello, World!"
 
-	t.Run("Multi", func(tr *testing.T) {
-		tks := make([]*model.Task, 0)
-		for i := int64(1); i <= 10; i++ {
-			tk := &model.Task{
-				ID:         i * 100,
-				Desc:       fmt.Sprintf("%s%d", desc, i),
-				Created:    now,
-				Done:       true,
-				Done2:      false,
-				Count:      int(i),
-				Count64:    0,
-				Proportion: 0.12345 + float64(i),
-				Flag:       model.Flag(true),
-				NameList:   []string{"a", "b", "c"},
-			}
-			tks = append(tks, tk)
-			ids = append(ids, tk.ID)
+	tks := make([]*model.Task, 0)
+	for i := int64(1); i <= 10; i++ {
+		tk := &model.Task{
+			ID:         i * 100,
+			Desc:       fmt.Sprintf("%s%d", desc, i),
+			Created:    now,
+			Done:       true,
+			Done2:      false,
+			Count:      int(i),
+			Count64:    0,
+			Proportion: 0.12345 + float64(i),
+			Flag:       model.Flag(true),
+			NameList:   []string{"a", "b", "c"},
 		}
-		err := taskRepo.InsertMulti(ctx, tks)
-		if err != nil {
-			tr.Fatalf("%+v", err)
-		}
+		tks = append(tks, tk)
+		ids = append(ids, tk.ID)
+	}
+	err := taskRepo.InsertMulti(ctx, tks)
+	if err != nil {
+		t.Fatalf("%+v", err)
+	}
 
+	t.Run("Multi", func(tr *testing.T) {
 		tks2 := make([]*model.Task, 0)
 		for i := int64(1); i <= 10; i++ {
 			tk := &model.Task{
