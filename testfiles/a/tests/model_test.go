@@ -305,7 +305,6 @@ func TestDynamoDBListNameWithRangeKey(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	pairs := make(map[int64]int)
 	defer func() {
-		return
 		defer cancel()
 		if err := nameRepo.DeleteMultiByPairs(ctx, pairs); err != nil {
 			t.Fatal(err)
