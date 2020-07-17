@@ -40,6 +40,8 @@ type {{ .RepositoryInterfaceName }} interface {
 	// Query
 	List(name string, value interface{}) *dynamo.Query
 	Scan() *dynamo.Scan
+	// Transaction
+	RunInTransaction(ctx context.Context, fn func(tx *dynamo.WriteTx) error) error
 	// misc
 	GetTable() dynamo.Table
 	GetTableName() string
@@ -92,6 +94,19 @@ func (repo *{{ .RepositoryStructName }}) Get(ctx context.Context, {{ .HashKeyVal
 		return nil, xerrors.Errorf("error in Get method: %w", err)
 	}
 	return subject, nil
+}
+
+// RunInTransaction - トランザクション中で処理を行う
+func (repo *taskRepository) RunInTransaction(ctx context.Context, fn func(tx *dynamo.WriteTx) error) error {
+	tx := repo.db.WriteTx()
+	tx.Idempotent(true)
+	if err := fn(tx); err != nil {
+		return xerrors.Errorf("error in func1 method: %w", err)
+	}
+	if err := tx.RunWithContext(ctx); err != nil {
+		return xerrors.Errorf("error in RunWithContext method: %w", err)
+	}
+	return nil
 }
 
 // Insert 処理中の {{ .StructName }} の登録処理一切の責任を持ち、これを行う
