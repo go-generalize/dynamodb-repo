@@ -311,12 +311,13 @@ func (repo *{{ .RepositoryStructName }}) UpdateMulti(ctx context.Context, subjec
 {{- end }}
 {{- range $i, $fi := .FieldInfos }}
 {{- if and ( ne $fi.Field $created ) ( ne $fi.Field $updated )}}
-			Set("{{ $fi.DynamoTag }}", subject.{{ $fi.Field }}){{ HasColon $i $.FieldInfos }}
+			Set("{{ $fi.DynamoTag }}", subject.{{ $fi.Field }}).
 {{- end }}
 {{- end }}
 {{- if eq .EnableUpdateTime true }}
-			Set("{{ .UpdateTimeDynamoTag }}", {{ Now .UpdateTimeType }})
+			Set("{{ .UpdateTimeDynamoTag }}", {{ Now .UpdateTimeType }}).
 {{- end }}
+			If("attribute_exists($)", "{{ .HashKeyFieldTagName }}")
 		tx.Update(u)
 	}
 	return tx.RunWithContext(ctx)
