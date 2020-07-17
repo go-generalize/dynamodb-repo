@@ -45,6 +45,8 @@ type {{ .RepositoryInterfaceName }} interface {
 	InsertWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }}) error
 	UpdateWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }}) error
 	ForceUpdateWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }})
+	DeleteWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }})
+	DeleteBy{{ FuncNameByValue }}WithTx(tx *dynamo.WriteTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ RangeKeyArgCheck }})
 	// misc
 	GetTable() dynamo.Table
 	GetTableName() string
@@ -257,6 +259,16 @@ func (repo *{{ .RepositoryStructName }}) Delete(ctx context.Context, subject *{{
 // DeleteBy{{ .HashKeyFieldName }} 処理中の {{ .StructName }} の{{ .HashKeyFieldName }}から削除処理一切の責任を持ち、これを行う
 func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ RangeKeyArgCheck }}) error {
 	return repo.table.Delete("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ RangeKeyValueCheckForDeletePair }}.RunWithContext(ctx)
+}
+
+// DeleteWithTx トランザクション中の {{ .StructName }} の削除処理を行う
+func (repo *{{ .RepositoryStructName }}) DeleteWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }}) {
+	tx.Delete(repo.table.Delete(repo.hashPair(subject)){{ RangeKeyValueCheckForDelete }})
+}
+
+// DeleteBy{{ .HashKeyFieldName }}WithTx トランザクション中の {{ .StructName }} の{{ .HashKeyFieldName }}から削除処理を行う
+func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}WithTx(tx *dynamo.WriteTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ RangeKeyArgCheck }}) {
+	tx.Delete(repo.table.Delete("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ RangeKeyValueCheckForDeletePair }})
 }
 
 // GetMulti 処理中の {{ .StructName }} の一括取得処理一切の責任を持ち、これを行う
