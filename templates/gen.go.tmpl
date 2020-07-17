@@ -42,6 +42,7 @@ type {{ .RepositoryInterfaceName }} interface {
 	Scan() *dynamo.Scan
 	// Transaction
 	RunInTransaction(ctx context.Context, fn func(tx *dynamo.WriteTx) error) error
+	ForceUpdateWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }})
 	// misc
 	GetTable() dynamo.Table
 	GetTableName() string
@@ -169,18 +170,27 @@ func (repo *{{ .RepositoryStructName }}) Update(ctx context.Context, subject *{{
 	return q.RunWithContext(ctx)
 }
 
-// ForceUpdate 処理中の {{ .StructName }} の更新処理一切の責任を持ち、これを行う
-func (repo *{{ .RepositoryStructName }}) ForceUpdate(ctx context.Context, subject *{{ .StructName }}) error {
-	u := repo.table.Update(repo.hashPair(subject)){{ RangeKeyValueCheckForDelete }}.
+func (repo *{{ .RepositoryStructName }}) forceUpdateQuery(subject *{{ .StructName }}) *dynamo.Update {
+	return repo.table.Update(repo.hashPair(subject)){{ RangeKeyValueCheckForDelete }}.
 {{- range $i, $fi := .FieldInfos }}
 {{- if and ( ne $fi.Field $created ) ( ne $fi.Field $updated )}}
-		Set("{{ $fi.DynamoTag }}", subject.{{ $fi.Field }}){{ HasColon $i $.FieldInfos }}
+		Set("{{ $fi.DynamoTag }}", subject.{{ $fi.Field }}).
 {{- end }}
 {{- end }}
 {{- if eq .EnableUpdateTime true }}
-		Set("{{ .UpdateTimeDynamoTag }}", {{ Now .UpdateTimeType }})
+		Set("{{ .UpdateTimeDynamoTag }}", {{ Now .UpdateTimeType }}).
 {{- end }}
-	return u.RunWithContext(ctx)
+		If("attribute_exists($)", "{{ .HashKeyFieldTagName }}")
+}
+
+// ForceUpdate 処理中の Task の更新処理一切の責任を持ち、これを行う
+func (repo *{{ .RepositoryStructName }}) ForceUpdate(ctx context.Context, subject *{{ .StructName }}) error {
+	return repo.forceUpdateQuery(subject).RunWithContext(ctx)
+}
+
+// ForceUpdateWithTx トランザクション中の Task の更新クエリを発行する
+func (repo *{{ .RepositoryStructName }}) ForceUpdateWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }}) {
+	tx.Update(repo.forceUpdateQuery(subject))
 }
 
 // Delete 処理中の {{ .StructName }} の削除処理一切の責任を持ち、これを行う
