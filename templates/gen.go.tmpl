@@ -41,6 +41,7 @@ type {{ .RepositoryInterfaceName }} interface {
 	Scan() *dynamo.Scan
 	// Transaction
 	RunInTransaction(ctx context.Context, fn func(tx *dynamo.WriteTx) error) error
+	GetWithTx(tx *dynamo.GetTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ RangeKeyArgCheck }}) (*{{ .StructName }}, error)
 	InsertWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }}) error
 	ForceUpdateWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }})
 	// misc
@@ -93,6 +94,17 @@ func (repo *{{ .RepositoryStructName }}) Get(ctx context.Context, {{ .HashKeyVal
 	subject := new({{ .StructName }})
 	if err := repo.table.Get("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ RangeKeyValueCheckForGet }}.OneWithContext(ctx, &subject); err != nil {
 		return nil, xerrors.Errorf("error in Get method: %w", err)
+	}
+	return subject, nil
+}
+
+// GetWithTx トランザクション中の {{ .StructName }} の取得処理を行う
+func (repo *{{ .RepositoryStructName }}) GetWithTx(tx *dynamo.GetTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ RangeKeyArgCheck }}) (*{{ .StructName }}, error) {
+	subject := new({{ .StructName }})
+	query := repo.table.Get("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ RangeKeyValueCheckForGet }}
+	tx.GetOne(query, &subject)
+	if err := tx.Run(); err != nil {
+		return nil, xerrors.Errorf("error in Run method: %w", err)
 	}
 	return subject, nil
 }
