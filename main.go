@@ -17,9 +17,16 @@ import (
 
 func main() {
 	var (
-		prefix = flag.String("prefix", "", "Prefix for table name")
+		prefix  = flag.String("prefix", "", "Prefix for table name")
+		version = flag.Bool("v", false, "print version")
 	)
+
 	flag.Parse()
+
+	if *version {
+		fmt.Printf("DynamoDB Model Generator: %s\n", AppVersion)
+		return
+	}
 
 	l := flag.NArg()
 
