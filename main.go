@@ -104,13 +104,17 @@ func traverse(pkg *ast.Package, fs *token.FileSet, structName, prefix string) er
 }
 
 func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) error {
-	var metaList []Field
+	var metaList map[string]Field
 	if !*disableMeta {
 		var err error
 		fList := listAllField(structType.Fields, "", false)
-		metaList, err = searchMetaProperties(fList)
+		metas, err := searchMetaProperties(fList)
 		if err != nil {
 			return err
+		}
+		metaList = make(map[string]Field)
+		for _, m := range metas {
+			metaList[m.Name] = m
 		}
 	}
 	gen.MetaFields = metaList

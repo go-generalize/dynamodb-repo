@@ -5,7 +5,7 @@ package {{ .PackageName }}
 import (
 	"context"
 	"reflect"
-{{- if or ( eq .EnableCreateTime true ) ( eq .EnableUpdateTime true )}}
+{{- if or (or ( eq .EnableCreateTime true ) ( eq .EnableUpdateTime true ) .MetaFields ) }}
 	"time"
 {{- end }}
 {{- range .ImportList }}
@@ -72,7 +72,28 @@ func (repo *{{ .RepositoryStructName }}) GetTableName() string {
 func (repo *{{ .RepositoryStructName }}) hashPair(subject *{{ .StructName }}) (string, interface{}) {
 	return "{{ .HashKeyFieldTagName }}", subject.{{ .HashKeyFieldName }}
 }
+{{ if .MetaFields }}
+// setMeta メタデータを設定する(Insert以外ではCreatedAtを設定しない)
+func (repo *{{ .RepositoryStructName }}) setMeta(subject *{{ .StructName }}, isInsert bool) {
+	now := time.Now()
+{{- $hasCreatedBy := HasKey .MetaFields "CreatedBy" }}
+{{- $hasUpdatedBy := HasKey .MetaFields "UpdatedBy" }}
+{{- if or $hasCreatedBy $hasUpdatedBy }}
+	by := now.Format(time.RFC3339)
+{{- end }}
 
+	if isInsert {
+		subject.CreatedAt = now
+{{- if $hasCreatedBy }}
+		subject.CreatedBy = by
+{{- end }}
+	}
+	subject.UpdatedAt = now
+{{- if $hasUpdatedBy }}
+	subject.UpdatedBy = by
+{{- end }}
+}
+{{ end }}
 // List ハッシュキーやGSIを利用した検索を行う
 // GSIを利用した場合、ListにはGSIが適用されている属性の名前と値を指定し、必ずIndexでインデックス名を指定する必要がある
 func (repo *{{ .RepositoryStructName }}) List(name string, value interface{}) *dynamo.Query {
@@ -116,6 +137,9 @@ func (repo *{{ .RepositoryStructName }}) Insert(ctx context.Context, subject *{{
 {{- if eq .EnableUpdateTime true }}
 	subject.{{ .UpdateTimeName }} = {{ Now .UpdateTimeType }}
 {{- end }}
+{{- if .MetaFields }}
+	repo.setMeta(subject, true)
+{{- end }}
 	return repo.table.Put(subject).RunWithContext(ctx)
 }
 
@@ -150,7 +174,9 @@ func (repo *{{ .RepositoryStructName }}) Update(ctx context.Context, subject *{{
 {{- if eq .EnableUpdateTime true }}
 	q = q.Set("{{ .UpdateTimeDynamoTag }}", {{ Now .UpdateTimeType }})
 {{- end }}
-
+{{- if .MetaFields }}
+	repo.setMeta(subject, false)
+{{- end }}
 	return q.RunWithContext(ctx)
 }
 
@@ -164,6 +190,9 @@ func (repo *{{ .RepositoryStructName }}) ForceUpdate(ctx context.Context, subjec
 {{- end }}
 {{- if eq .EnableUpdateTime true }}
 		Set("{{ .UpdateTimeDynamoTag }}", {{ Now .UpdateTimeType }})
+{{- end }}
+{{- if .MetaFields }}
+	repo.setMeta(subject, false)
 {{- end }}
 	return u.RunWithContext(ctx)
 }
@@ -214,6 +243,9 @@ func (repo *{{ .RepositoryStructName }}) InsertMulti(ctx context.Context, subjec
 {{- if eq .EnableUpdateTime true }}
 		subject.{{ .UpdateTimeName }} = {{ Now .UpdateTimeType }}
 {{- end }}
+{{- if .MetaFields }}
+		repo.setMeta(subject, true)
+{{- end }}
 		tx.Put(repo.table.Put(subject))
 	}
 	return tx.RunWithContext(ctx)
@@ -235,6 +267,9 @@ func (repo *{{ .RepositoryStructName }}) UpdateMulti(ctx context.Context, subjec
 {{- if eq .EnableUpdateTime true }}
 			Set("{{ .UpdateTimeDynamoTag }}", {{ Now .UpdateTimeType }})
 {{- end }}
+{{- if .MetaFields }}
+		repo.setMeta(subject, false)
+{{- end}}
 		tx.Update(u)
 	}
 	return tx.RunWithContext(ctx)

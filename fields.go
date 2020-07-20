@@ -125,7 +125,7 @@ func searchMetaProperties(fields []Field) ([]Field, error) {
 		if !t.Find && t.Require {
 			return nil, xerrors.Errorf("%s is require", filedName)
 		}
-		if t.RequireType != t.FindType {
+		if t.Find && t.RequireType != t.FindType {
 			return nil, xerrors.Errorf("%s must be type %s", filedName, t.RequireType)
 		}
 	}

@@ -72,7 +72,7 @@ type generator struct {
 	UpdateTimeType      string
 	EnableDDA           bool
 
-	MetaFields []Field
+	MetaFields map[string]Field
 }
 
 func (g *generator) setting() {
@@ -221,6 +221,10 @@ func (g *generator) setFuncMap() template.FuncMap {
 				return "dda.UnixTime(time.Now())"
 			}
 			return "time.Now()"
+		},
+		"HasKey": func(fields map[string]Field, key string) bool {
+			_, ok := fields[key]
+			return ok
 		},
 	}
 }
