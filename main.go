@@ -36,12 +36,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := run(flag.Arg(0), *prefix); err != nil {
+	if err := run(flag.Arg(0), *prefix, *disableMeta); err != nil {
 		log.Fatal(err.Error())
 	}
 }
 
-func run(structName, prefix string) error {
+func run(structName, prefix string, isDisableMeta bool) error {
+	disableMeta = &isDisableMeta
 	fs := token.NewFileSet()
 	pkgs, err := parser.ParseDir(fs, ".", nil, parser.AllErrors)
 
