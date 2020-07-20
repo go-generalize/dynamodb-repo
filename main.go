@@ -120,7 +120,17 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 		if len(field.Names) > 1 {
 			return xerrors.New("`field.Names` must have only one element")
 		}
-		name := field.Names[0].Name
+		name := ""
+		if field.Names == nil || len(field.Names) == 0 {
+			switch field.Type.(type) {
+			case *ast.Ident:
+				name = field.Type.(*ast.Ident).Name
+			case *ast.SelectorExpr:
+				name = field.Type.(*ast.SelectorExpr).Sel.Name
+			}
+		} else {
+			name = field.Names[0].Name
+		}
 
 		pos := fs.Position(field.Pos()).String()
 
