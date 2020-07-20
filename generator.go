@@ -71,6 +71,8 @@ type generator struct {
 	UpdateTimeDynamoTag string
 	UpdateTimeType      string
 	EnableDDA           bool
+
+	MetaFields []Field
 }
 
 func (g *generator) setting() {

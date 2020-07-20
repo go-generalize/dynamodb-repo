@@ -15,12 +15,13 @@ import (
 	"golang.org/x/xerrors"
 )
 
-func main() {
-	var (
-		prefix  = flag.String("prefix", "", "Prefix for table name")
-		version = flag.Bool("v", false, "print version")
-	)
+var (
+	prefix      = flag.String("prefix", "", "Prefix for table name")
+	disableMeta = flag.Bool("disable-meta", false, "Disable meta embed for Lock")
+	version     = flag.Bool("v", false, "print version")
+)
 
+func main() {
 	flag.Parse()
 
 	if *version {
@@ -103,9 +104,20 @@ func traverse(pkg *ast.Package, fs *token.FileSet, structName, prefix string) er
 }
 
 func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) error {
+	var metaList []Field
+	if !*disableMeta {
+		var err error
+		fList := listAllField(structType.Fields, "", false)
+		metaList, err = searchMetaProperties(fList)
+		if err != nil {
+			return err
+		}
+	}
+	gen.MetaFields = metaList
+
 	for _, field := range structType.Fields.List {
 		// structの各fieldを調査
-		if len(field.Names) != 1 {
+		if len(field.Names) > 1 {
 			return xerrors.New("`field.Names` must have only one element")
 		}
 		name := field.Names[0].Name
