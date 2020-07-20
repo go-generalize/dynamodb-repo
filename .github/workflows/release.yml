@@ -1,5 +1,3 @@
-
-GoLandIntelliJ IDEAPhpStormWebStorm
 name: release
 on:
   push:
