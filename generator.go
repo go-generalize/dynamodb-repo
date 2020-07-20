@@ -9,6 +9,7 @@ import (
 	"text/template"
 
 	_ "github.com/go-generalize/dynamodb-repo/statik"
+	"github.com/go-utils/plural"
 	"github.com/iancoleman/strcase"
 	"github.com/rakyll/statik/fs"
 )
@@ -105,7 +106,6 @@ func (g *generator) setFuncMap() template.FuncMap {
 	return template.FuncMap{
 		"Parse": func(fieldType string) string {
 			fieldType = strings.TrimPrefix(fieldType, "[]")
-
 			fn := "Int"
 			switch fieldType {
 			case typeInt:
@@ -125,77 +125,17 @@ func (g *generator) setFuncMap() template.FuncMap {
 		"HasPrefixSlice": func(types string) bool {
 			return strings.HasPrefix(types, "[]")
 		},
-		"HasColon": func(idx int, fields []*FieldInfo) string {
-			if (idx + 1) == len(fields) {
-				return ""
-			}
-			return "."
-		},
-		"RangeKeyArgCheck": func() string {
-			if g.RangeKeyFieldName != "" {
-				return fmt.Sprintf(", %s %s", g.RangeKeyValueName, g.RangeKeyFieldType)
-			}
-			return ""
-		},
 		"RangeKeyArgCheckPairs": func() string {
 			if g.RangeKeyFieldName != "" {
 				return fmt.Sprintf("pairs map[%s]%s", g.HashKeyFieldType, g.RangeKeyFieldType)
 			}
-			return fmt.Sprintf("%ss []%s", g.HashKeyValueName, g.HashKeyFieldType)
-		},
-		"RangeKeyValueCheckForGet": func() string {
-			if g.RangeKeyFieldName != "" {
-				return fmt.Sprintf(".Range(\"%s\", dynamo.Equal, %s)", g.RangeKeyFieldTagName, g.RangeKeyValueName)
-			}
-			return ""
-		},
-		"RangeKeyValueCheckForInsert": func() string {
-			if g.RangeKeyFieldName != "" {
-				return fmt.Sprintf("subject.%s, subject.%s", g.HashKeyFieldName, g.RangeKeyFieldName)
-			}
-			return "subject." + g.HashKeyFieldName
-		},
-		"RangeKeyValueCheckForInsertFmt": func() string {
-			if g.RangeKeyFieldName != "" {
-				return ", range: %v"
-			}
-			return ""
-		},
-		"RangeKeyDelivery": func() string {
-			if g.RangeKeyFieldName != "" {
-				return fmt.Sprintf(", subject.%s", g.RangeKeyFieldName)
-			}
-			return ""
+			return fmt.Sprintf("%s []%s", plural.Convert(g.HashKeyValueName), g.HashKeyFieldType)
 		},
 		"RangeKeyForTerms": func() string {
 			if g.RangeKeyFieldName != "" {
 				return fmt.Sprintf("key, value := range pairs")
 			}
-			return fmt.Sprintf("_, %s := range %ss", g.HashKeyValueName, g.HashKeyValueName)
-		},
-		"RangeKeyForValue": func() string {
-			if g.RangeKeyFieldName != "" {
-				return "key, value"
-			}
-			return g.HashKeyValueName
-		},
-		"RangeKeyValueCheckForDelete": func() string {
-			if g.RangeKeyFieldName != "" {
-				return fmt.Sprintf(".Range(\"%s\", subject.%s)", g.RangeKeyFieldTagName, g.RangeKeyFieldName)
-			}
-			return ""
-		},
-		"RangeKeyValueCheckForDeletePair": func() string {
-			if g.RangeKeyFieldName != "" {
-				return fmt.Sprintf(".Range(\"%s\", %s)", g.RangeKeyFieldTagName, g.RangeKeyValueName)
-			}
-			return ""
-		},
-		"RangeKeyForDeleteMultiByPairs": func() string {
-			if g.RangeKeyFieldName != "" {
-				return fmt.Sprintf("(\"%s\", key).Range(\"%s\", value)", g.HashKeyFieldTagName, g.RangeKeyFieldTagName)
-			}
-			return fmt.Sprintf("(\"%s\", %s)", g.HashKeyFieldTagName, g.HashKeyValueName)
+			return fmt.Sprintf("_, %s := range %s", g.HashKeyFieldTagName, plural.Convert(g.HashKeyValueName))
 		},
 		"FuncNameByValue": func() string {
 			if g.RangeKeyFieldName != "" {
@@ -219,6 +159,9 @@ func (g *generator) setFuncMap() template.FuncMap {
 				return "dda.UnixTime(time.Now())"
 			}
 			return "time.Now()"
+		},
+		"PluralForm": func(word string) string {
+			return plural.Convert(word)
 		},
 	}
 }

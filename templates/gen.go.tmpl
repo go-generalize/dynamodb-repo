@@ -25,21 +25,29 @@ import (
 
 type {{ .RepositoryInterfaceName }} interface {
 	// Single
-	Get(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ RangeKeyArgCheck }}) (*{{ .StructName }}, error)
+	Get(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}) (*{{ .StructName }}, error)
 	Insert(ctx context.Context, subject *{{ .StructName }}) error
 	Update(ctx context.Context, subject *{{ .StructName }}) error
 	ForceUpdate(ctx context.Context, subject *{{ .StructName }}) error
 	Delete(ctx context.Context, subject *{{ .StructName }}) error
-	DeleteBy{{ FuncNameByValue }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ RangeKeyArgCheck }}) error
+	DeleteBy{{ FuncNameByValue }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}) error
 	// Multiple
 	GetMulti(ctx context.Context, {{ RangeKeyArgCheckPairs }}) ([]*{{ .StructName }}, error)
 	InsertMulti(ctx context.Context, subjects []*{{ .StructName }}) error
 	UpdateMulti(ctx context.Context, subjects []*{{ .StructName }}) error
 	DeleteMulti(ctx context.Context, subjects []*{{ .StructName }}) error
-	DeleteMultiBy{{ FuncNameByValue }}s(ctx context.Context, {{ RangeKeyArgCheckPairs }}) error
+	DeleteMultiBy{{ PluralForm FuncNameByValue }}(ctx context.Context, {{ RangeKeyArgCheckPairs }}) error
 	// Query
 	List(name string, value interface{}) *dynamo.Query
 	Scan() *dynamo.Scan
+	// Transaction
+	RunInTransaction(ctx context.Context, fn func(tx *dynamo.WriteTx) error) error
+	GetWithTx(tx *dynamo.GetTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}) (*{{ .StructName }}, error)
+	InsertWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }}) error
+	UpdateWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }}) error
+	ForceUpdateWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }})
+	DeleteWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }})
+	DeleteBy{{ FuncNameByValue }}WithTx(tx *dynamo.WriteTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }})
 	// misc
 	GetTable() dynamo.Table
 	GetTableName() string
@@ -86,12 +94,47 @@ func (repo *{{ .RepositoryStructName }}) Scan() *dynamo.Scan {
 }
 
 // Get 処理中の {{ .StructName }} の取得処理一切の責任を持ち、これを行う
-func (repo *{{ .RepositoryStructName }}) Get(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ RangeKeyArgCheck }}) (*{{ .StructName }}, error) {
+func (repo *{{ .RepositoryStructName }}) Get(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}) (*{{ .StructName }}, error) {
 	subject := new({{ .StructName }})
-	if err := repo.table.Get("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ RangeKeyValueCheckForGet }}.OneWithContext(ctx, &subject); err != nil {
+	if err := repo.table.Get("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", dynamo.Equal, {{ .RangeKeyValueName }}){{ end }}.OneWithContext(ctx, &subject); err != nil {
 		return nil, xerrors.Errorf("error in Get method: %w", err)
 	}
 	return subject, nil
+}
+
+// GetWithTx トランザクション中の {{ .StructName }} の取得処理を行う
+func (repo *{{ .RepositoryStructName }}) GetWithTx(tx *dynamo.GetTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}) (*{{ .StructName }}, error) {
+	subject := new({{ .StructName }})
+	query := repo.table.Get("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", dynamo.Equal, {{ .RangeKeyValueName }}){{ end }}
+	tx.GetOne(query, &subject)
+	if err := tx.Run(); err != nil {
+		return nil, xerrors.Errorf("error in Run method: %w", err)
+	}
+	return subject, nil
+}
+
+// RunInTransaction - トランザクション中で処理を行う
+func (repo *{{ .RepositoryStructName }}) RunInTransaction(ctx context.Context, fn func(tx *dynamo.WriteTx) error) error {
+	tx := repo.db.WriteTx()
+	tx.Idempotent(true)
+	if err := fn(tx); err != nil {
+		return xerrors.Errorf("error in func1 method: %w", err)
+	}
+	if err := tx.RunWithContext(ctx); err != nil {
+		return xerrors.Errorf("error in RunWithContext method: %w", err)
+	}
+	return nil
+}
+
+func (repo *{{ .RepositoryStructName }}) insertQuery(subject *{{ .StructName }}) *dynamo.Put {
+{{- if eq .EnableCreateTime true }}
+	subject.{{ .CreateTimeName }} = {{ Now .CreateTimeType }}
+{{- end }}
+{{- if eq .EnableUpdateTime true }}
+	subject.{{ .UpdateTimeName }} = {{ Now .UpdateTimeType }}
+{{- end }}
+	query := repo.table.Put(subject)
+	return query.If("attribute_not_exists($)", "{{ .HashKeyFieldTagName }}")
 }
 
 // Insert 処理中の {{ .StructName }} の登録処理一切の責任を持ち、これを行う
@@ -106,29 +149,31 @@ func (repo *{{ .RepositoryStructName }}) Insert(ctx context.Context, subject *{{
 {{- end }}
 		return xerrors.New("{{ .HashKeyFieldName }} is required")
 	}
-	if _, err := repo.Get(ctx, {{ RangeKeyValueCheckForInsert }}); err == nil {
-		return xerrors.Errorf("already exist [hash: %s{{ RangeKeyValueCheckForInsertFmt }}]", {{ RangeKeyValueCheckForInsert }})
-	}
 {{- end }}
-{{- if eq .EnableCreateTime true }}
-	subject.{{ .CreateTimeName }} = {{ Now .CreateTimeType }}
-{{- end }}
-{{- if eq .EnableUpdateTime true }}
-	subject.{{ .UpdateTimeName }} = {{ Now .UpdateTimeType }}
-{{- end }}
-	return repo.table.Put(subject).RunWithContext(ctx)
+	return repo.insertQuery(subject).RunWithContext(ctx)
 }
 
-// Update 処理中の {{ .StructName }} の更新処理一切の責任を持ち、これを行う
-func (repo *{{ .RepositoryStructName }}) Update(ctx context.Context, subject *{{ .StructName }}) (err error) {
-	old, err := repo.Get(ctx, subject.{{ .HashKeyFieldName }}{{ RangeKeyDelivery }})
-	if err != nil {
-		return xerrors.Errorf("error in Get method: %w", err)
+// InsertWithTx トランザクション中の {{ .StructName }} の登録処理を行う
+func (repo *{{ .RepositoryStructName }}) InsertWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }}) error {
+{{- if eq .AutoGeneration true }}
+	subject.{{ .HashKeyFieldName }} = {{ GenerationKey }}
+{{- else }}
+{{- if eq .HashKeyFieldType "string" }}
+	if subject.{{ .HashKeyFieldName }} == "" {
+{{- else }}
+	if subject.{{ .HashKeyFieldName }} == 0 {
+{{- end }}
+		return xerrors.New("{{ .HashKeyFieldName }} is required")
 	}
+{{- end }}
+	tx.Put(repo.insertQuery(subject))
+	return nil
+}
 
+func (repo *{{ .RepositoryStructName }}) updateQuery(old, subject *{{ .StructName }}) *dynamo.Update {
 	updated := map[string]interface{}{}
-{{- $created := .CreateTimeName }}
-{{- $updated := .UpdateTimeName }}
+	{{- $created := .CreateTimeName }}
+	{{- $updated := .UpdateTimeName }}
 {{- range $i, $fi := .FieldInfos }}
 {{- if and ( ne $fi.Field $created ) ( ne $fi.Field $updated )}}
 	if !reflect.DeepEqual(old.{{$fi.Field}}, subject.{{$fi.Field}}) {
@@ -137,51 +182,100 @@ func (repo *{{ .RepositoryStructName }}) Update(ctx context.Context, subject *{{
 
 {{- end }}
 {{- end }}
-
 	if len(updated) == 0 {
+		return nil
+	}
+
+	query := repo.table.Update(repo.hashPair(subject)){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", subject.{{ .RangeKeyFieldName }}){{ end }}
+	for path, v := range updated {
+		query.Set(path, v)
+	}
+
+{{- if eq .EnableUpdateTime true }}
+	query.Set("{{ .UpdateTimeDynamoTag }}", {{ Now .UpdateTimeType }})
+{{- end }}
+	return query.If("attribute_exists($)", "{{ .HashKeyFieldTagName }}")
+}
+
+// Update 処理中の {{ .StructName }} の更新処理一切の責任を持ち、これを行う
+func (repo *{{ .RepositoryStructName }}) Update(ctx context.Context, subject *{{ .StructName }}) error {
+	old, err := repo.Get(ctx, subject.{{ .HashKeyFieldName }}{{ if ne .RangeKeyFieldName "" }}, subject.{{ .RangeKeyFieldName }}{{ end }})
+	if err != nil {
+		return xerrors.Errorf("error in Get method: %w", err)
+	}
+
+	query := repo.updateQuery(old, subject)
+	if query == nil {
 		return ErrNoDifference
 	}
 
-	q := repo.table.Update(repo.hashPair(subject)){{ RangeKeyValueCheckForDelete }}
-	for path, v := range updated {
-		q = q.Set(path, v)
-	}
-
-{{- if eq .EnableUpdateTime true }}
-	q = q.Set("{{ .UpdateTimeDynamoTag }}", {{ Now .UpdateTimeType }})
-{{- end }}
-
-	return q.RunWithContext(ctx)
+	return query.RunWithContext(ctx)
 }
 
-// ForceUpdate 処理中の {{ .StructName }} の更新処理一切の責任を持ち、これを行う
-func (repo *{{ .RepositoryStructName }}) ForceUpdate(ctx context.Context, subject *{{ .StructName }}) error {
-	u := repo.table.Update(repo.hashPair(subject)){{ RangeKeyValueCheckForDelete }}.
+// UpdateWithTx トランザクション中の {{ .StructName }} の更新処理を行う
+func (repo *{{ .RepositoryStructName }}) UpdateWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }}) error {
+	getTx := repo.db.GetTx()
+	old, err := repo.GetWithTx(getTx, subject.{{ .HashKeyFieldName }}{{ if ne .RangeKeyFieldName "" }}, subject.{{ .RangeKeyFieldName }}{{ end }})
+	if err != nil {
+		return xerrors.Errorf("error in GetWithTx method: %w", err)
+	}
+
+	query := repo.updateQuery(old, subject)
+	if query == nil {
+		return ErrNoDifference
+	}
+
+	tx.Update(query)
+	return nil
+}
+
+func (repo *{{ .RepositoryStructName }}) forceUpdateQuery(subject *{{ .StructName }}) *dynamo.Update {
+	return repo.table.Update(repo.hashPair(subject)){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", subject.{{ .RangeKeyFieldName }}){{ end }}.
 {{- range $i, $fi := .FieldInfos }}
 {{- if and ( ne $fi.Field $created ) ( ne $fi.Field $updated )}}
-		Set("{{ $fi.DynamoTag }}", subject.{{ $fi.Field }}){{ HasColon $i $.FieldInfos }}
+		Set("{{ $fi.DynamoTag }}", subject.{{ $fi.Field }}).
 {{- end }}
 {{- end }}
 {{- if eq .EnableUpdateTime true }}
-		Set("{{ .UpdateTimeDynamoTag }}", {{ Now .UpdateTimeType }})
+		Set("{{ .UpdateTimeDynamoTag }}", {{ Now .UpdateTimeType }}).
 {{- end }}
-	return u.RunWithContext(ctx)
+		If("attribute_exists($)", "{{ .HashKeyFieldTagName }}")
+}
+
+// ForceUpdate 処理中の Task の更新処理一切の責任を持ち、これを行う
+func (repo *{{ .RepositoryStructName }}) ForceUpdate(ctx context.Context, subject *{{ .StructName }}) error {
+	return repo.forceUpdateQuery(subject).RunWithContext(ctx)
+}
+
+// ForceUpdateWithTx トランザクション中の Task の更新クエリを発行する
+func (repo *{{ .RepositoryStructName }}) ForceUpdateWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }}) {
+	tx.Update(repo.forceUpdateQuery(subject))
 }
 
 // Delete 処理中の {{ .StructName }} の削除処理一切の責任を持ち、これを行う
 func (repo *{{ .RepositoryStructName }}) Delete(ctx context.Context, subject *{{ .StructName }}) error {
-	return repo.table.Delete(repo.hashPair(subject)){{ RangeKeyValueCheckForDelete }}.RunWithContext(ctx)
+	return repo.table.Delete(repo.hashPair(subject)){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", subject.{{ .RangeKeyFieldName }}){{ end }}.RunWithContext(ctx)
 }
 
 // DeleteBy{{ .HashKeyFieldName }} 処理中の {{ .StructName }} の{{ .HashKeyFieldName }}から削除処理一切の責任を持ち、これを行う
-func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ RangeKeyArgCheck }}) error {
-	return repo.table.Delete("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ RangeKeyValueCheckForDeletePair }}.RunWithContext(ctx)
+func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}) error {
+	return repo.table.Delete("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", {{ .RangeKeyValueName }}){{ end }}.RunWithContext(ctx)
+}
+
+// DeleteWithTx トランザクション中の {{ .StructName }} の削除処理を行う
+func (repo *{{ .RepositoryStructName }}) DeleteWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }}) {
+	tx.Delete(repo.table.Delete(repo.hashPair(subject)){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", subject.{{ .RangeKeyFieldName }}){{ end }})
+}
+
+// DeleteBy{{ .HashKeyFieldName }}WithTx トランザクション中の {{ .StructName }} の{{ .HashKeyFieldName }}から削除処理を行う
+func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}WithTx(tx *dynamo.WriteTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}) {
+	tx.Delete(repo.table.Delete("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", {{ .RangeKeyValueName }}){{ end }})
 }
 
 // GetMulti 処理中の {{ .StructName }} の一括取得処理一切の責任を持ち、これを行う
 func (repo *{{ .RepositoryStructName }}) GetMulti(ctx context.Context, {{ RangeKeyArgCheckPairs }}) (subjects []*{{ .StructName }}, err error) {
 	for {{ RangeKeyForTerms }} {
-		subject, err := repo.Get(ctx, {{ RangeKeyForValue }})
+		subject, err := repo.Get(ctx, {{ if ne .RangeKeyFieldName "" }}key, value{{ else }}{{ .HashKeyFieldTagName }}{{ end }})
 		if err != nil {
 			return nil, xerrors.Errorf("error in Get method: %w", err)
 		}
@@ -194,27 +288,9 @@ func (repo *{{ .RepositoryStructName }}) GetMulti(ctx context.Context, {{ RangeK
 func (repo *{{ .RepositoryStructName }}) InsertMulti(ctx context.Context, subjects []*{{ .StructName }}) error {
 	tx := repo.db.WriteTx()
 	for _, subject := range subjects {
-{{- if eq .AutoGeneration true }}
-		subject.{{ .HashKeyFieldName }} = {{ GenerationKey }}
-{{- else }}
-{{- if eq .HashKeyFieldType "string" }}
-		if subject.{{ .HashKeyFieldName }} == "" {
-{{- else }}
-		if subject.{{ .HashKeyFieldName }} == 0 {
-{{- end }}
-			return xerrors.New("{{ .HashKeyFieldName }} is required")
+		if err := repo.InsertWithTx(tx, subject); err != nil {
+			return xerrors.Errorf("error in InsertWithTx method: %w", err)
 		}
-		if _, err := repo.Get(ctx, {{ RangeKeyValueCheckForInsert }}); err == nil {
-			return xerrors.Errorf("already exist [hash: %v{{ RangeKeyValueCheckForInsertFmt }}]", {{ RangeKeyValueCheckForInsert }})
-		}
-{{- end }}
-{{- if eq .EnableCreateTime true }}
-		subject.{{ .CreateTimeName }} = {{ Now .CreateTimeType }}
-{{- end }}
-{{- if eq .EnableUpdateTime true }}
-		subject.{{ .UpdateTimeName }} = {{ Now .UpdateTimeType }}
-{{- end }}
-		tx.Put(repo.table.Put(subject))
 	}
 	return tx.RunWithContext(ctx)
 }
@@ -223,19 +299,7 @@ func (repo *{{ .RepositoryStructName }}) InsertMulti(ctx context.Context, subjec
 func (repo *{{ .RepositoryStructName }}) UpdateMulti(ctx context.Context, subjects []*{{ .StructName }}) error {
 	tx := repo.db.WriteTx()
 	for _, subject := range subjects {
-		u := repo.table.Update(repo.hashPair(subject)).
-{{- if ne .RangeKeyFieldName "" }}
-			Range("{{ .RangeKeyFieldTagName }}", subject.{{ .RangeKeyFieldName }}).
-{{- end }}
-{{- range $i, $fi := .FieldInfos }}
-{{- if and ( ne $fi.Field $created ) ( ne $fi.Field $updated )}}
-			Set("{{ $fi.DynamoTag }}", subject.{{ $fi.Field }}){{ HasColon $i $.FieldInfos }}
-{{- end }}
-{{- end }}
-{{- if eq .EnableUpdateTime true }}
-			Set("{{ .UpdateTimeDynamoTag }}", {{ Now .UpdateTimeType }})
-{{- end }}
-		tx.Update(u)
+		repo.ForceUpdateWithTx(tx, subject)
 	}
 	return tx.RunWithContext(ctx)
 }
@@ -244,16 +308,16 @@ func (repo *{{ .RepositoryStructName }}) UpdateMulti(ctx context.Context, subjec
 func (repo *{{ .RepositoryStructName }}) DeleteMulti(ctx context.Context, subjects []*{{ .StructName }}) error {
 	tx := repo.db.WriteTx()
 	for _, subject := range subjects {
-		tx.Delete(repo.table.Delete(repo.hashPair(subject)){{ RangeKeyValueCheckForDelete }})
+		repo.DeleteWithTx(tx, subject)
 	}
 	return tx.RunWithContext(ctx)
 }
 
-// DeleteMultiBy{{ .HashKeyFieldName }}s 処理中の {{ .StructName }} の{{ .HashKeyFieldName }}群を元に一括削除処理一切の責任を持ち、これを行う
-func (repo *{{ .RepositoryStructName }}) DeleteMultiBy{{ FuncNameByValue }}s(ctx context.Context, {{ RangeKeyArgCheckPairs }}) error {
+// DeleteMultiBy{{ PluralForm FuncNameByValue }} 処理中の {{ .StructName }} の{{ .HashKeyFieldName }}群を元に一括削除処理一切の責任を持ち、これを行う
+func (repo *{{ .RepositoryStructName }}) DeleteMultiBy{{ PluralForm FuncNameByValue }}(ctx context.Context, {{ RangeKeyArgCheckPairs }}) error {
 	tx := repo.db.WriteTx()
 	for {{ RangeKeyForTerms }} {
-		tx.Delete(repo.table.Delete{{ RangeKeyForDeleteMultiByPairs }})
+		repo.DeleteBy{{ FuncNameByValue }}WithTx(tx, {{ if ne .RangeKeyFieldName "" }}key, value{{ else }}{{ .HashKeyFieldTagName }}{{ end }})
 	}
 	return tx.RunWithContext(ctx)
 }
