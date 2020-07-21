@@ -53,7 +53,7 @@ type {{ .RepositoryInterfaceName }} interface {
 	GetTableName() string
 }
 
-{{ $middlewareName := printf "%sMiddleware" .RepositoryInterfaceName }}
+{{- $middlewareName := printf "%sMiddleware" .RepositoryInterfaceName }}
 type {{ $middlewareName }} interface {
 	BeforeInsert(ctx context.Context, subject *{{ .StructName }}) (bool, error)
 	BeforeUpdate(ctx context.Context, subject *{{ .StructName }}) (bool, error)
