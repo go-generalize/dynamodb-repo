@@ -43,26 +43,36 @@ type {{ .RepositoryInterfaceName }} interface {
 	// Transaction
 	RunInTransaction(ctx context.Context, fn func(tx *dynamo.WriteTx) error) error
 	GetWithTx(tx *dynamo.GetTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}) (*{{ .StructName }}, error)
-	InsertWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }}) error
-	UpdateWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }}) error
-	ForceUpdateWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }})
-	DeleteWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }})
-	DeleteBy{{ FuncNameByValue }}WithTx(tx *dynamo.WriteTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }})
+	InsertWithTx(ctx context.Context, tx *dynamo.WriteTx, subject *{{ .StructName }}) error
+	UpdateWithTx(ctx context.Context, tx *dynamo.WriteTx, subject *{{ .StructName }}) error
+	ForceUpdateWithTx(ctx context.Context, tx *dynamo.WriteTx, subject *{{ .StructName }}) error
+	DeleteWithTx(ctx context.Context, tx *dynamo.WriteTx, subject *{{ .StructName }}) error
+	DeleteBy{{ FuncNameByValue }}WithTx(ctx context.Context, tx *dynamo.WriteTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}) error
 	// misc
 	GetTable() dynamo.Table
 	GetTableName() string
 }
 
+{{ $middlewareName := printf "%sMiddleware" .RepositoryInterfaceName }}
+type {{ $middlewareName }} interface {
+	BeforeInsert(ctx context.Context, subject *{{ .StructName }}) (bool, error)
+	BeforeUpdate(ctx context.Context, subject *{{ .StructName }}) (bool, error)
+	BeforeDelete(ctx context.Context, subject *{{ .StructName }}) (bool, error)
+	BeforeDeleteBy{{ FuncNameByValue }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}) (bool, error)
+}
+
 type {{ .RepositoryStructName }} struct {
-	db    *dynamo.DB
-	table dynamo.Table
+	db         *dynamo.DB
+	table      dynamo.Table
+	middleware []{{ $middlewareName }}
 }
 
 // New{{ .RepositoryInterfaceName }} constructor
-func New{{ .RepositoryInterfaceName }}(db *dynamo.DB) {{ .RepositoryInterfaceName }} {
+func New{{ .RepositoryInterfaceName }}(db *dynamo.DB, middleware... {{ $middlewareName }}) {{ .RepositoryInterfaceName }} {
 	return &{{ .RepositoryStructName }}{
-		db:    db,
-		table: db.Table("{{ .TableName }}"),
+		db:         db,
+		table:      db.Table("{{ .TableName }}"),
+		middleware: middleware,
 	}
 }
 
@@ -147,14 +157,25 @@ func (repo *{{ .RepositoryStructName }}) insertQuery(subject *{{ .StructName }})
 	query := repo.table.Put(subject)
 	return query.If("attribute_not_exists($)", "{{ .HashKeyFieldTagName }}")
 }
-{{ if .MetaFields }}
-func (repo *{{ .RepositoryStructName }}) beforeInsert(subject *{{ .StructName }}) error {
+func (repo *{{ .RepositoryStructName }}) beforeInsert(ctx context.Context, subject *{{ .StructName }}) error {
+{{- if .MetaFields }}
 	if subject.Version != 0 {
 		return xerrors.Errorf("insert data must be Version == 0: %+v", subject)
 	}
+
+{{- end }}
+	for _, m := range repo.middleware {
+		c, err := m.BeforeInsert(ctx, subject)
+		if err != nil {
+			return err
+		}
+		if !c {
+			continue
+		}
+	}
+
 	return nil
 }
-{{ end }}
 // Insert 処理中の {{ .StructName }} の登録処理一切の責任を持ち、これを行う
 func (repo *{{ .RepositoryStructName }}) Insert(ctx context.Context, subject *{{ .StructName }}) error {
 {{- if eq .AutoGeneration true }}
@@ -167,18 +188,16 @@ func (repo *{{ .RepositoryStructName }}) Insert(ctx context.Context, subject *{{
 {{- end }}
 		return xerrors.New("{{ .HashKeyFieldName }} is required")
 	}
-{{- if .MetaFields }}
-	if err := repo.beforeInsert(subject); err != nil {
+{{- end }}
+	if err := repo.beforeInsert(ctx, subject); err != nil {
 		return err
 	}
-{{- end  }}
 
-{{- end }}
 	return repo.insertQuery(subject).RunWithContext(ctx)
 }
 
 // InsertWithTx トランザクション中の {{ .StructName }} の登録処理を行う
-func (repo *{{ .RepositoryStructName }}) InsertWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }}) error {
+func (repo *{{ .RepositoryStructName }}) InsertWithTx(ctx context.Context, tx *dynamo.WriteTx, subject *{{ .StructName }}) error {
 {{- if eq .AutoGeneration true }}
 	subject.{{ .HashKeyFieldName }} = {{ GenerationKey }}
 {{- else }}
@@ -190,17 +209,15 @@ func (repo *{{ .RepositoryStructName }}) InsertWithTx(tx *dynamo.WriteTx, subjec
 		return xerrors.New("{{ .HashKeyFieldName }} is required")
 	}
 {{- end }}
-{{- if .MetaFields }}
-	if err := repo.beforeInsert(subject); err != nil {
+	if err := repo.beforeInsert(ctx, subject); err != nil {
 		return err
 	}
-{{- end  }}
 
 	tx.Put(repo.insertQuery(subject))
 	return nil
 }
 
-func (repo *{{ .RepositoryStructName }}) updateQuery(old, subject *{{ .StructName }}) (*dynamo.Update, error) {
+func (repo *{{ .RepositoryStructName }}) updateQuery(ctx context.Context, old, subject *{{ .StructName }}) (*dynamo.Update, error) {
 	updated := map[string]interface{}{}
 	{{- $created := .CreateTimeName }}
 	{{- $updated := .UpdateTimeName }}
@@ -229,6 +246,16 @@ func (repo *{{ .RepositoryStructName }}) updateQuery(old, subject *{{ .StructNam
 {{- if eq .EnableUpdateTime true }}
 	query.Set("{{ .UpdateTimeDynamoTag }}", {{ Now .UpdateTimeType }})
 {{- end }}
+
+	for _, m := range repo.middleware {
+		c, err := m.BeforeUpdate(ctx, subject)
+		if err != nil {
+			return nil, err
+		}
+		if !c {
+			continue
+		}
+	}
 	return query.If("attribute_exists($)", "{{ .HashKeyFieldTagName }}"), nil
 }
 
@@ -239,7 +266,7 @@ func (repo *{{ .RepositoryStructName }}) Update(ctx context.Context, subject *{{
 		return xerrors.Errorf("error in Get method: %w", err)
 	}
 
-	query, err := repo.updateQuery(old, subject)
+	query, err := repo.updateQuery(ctx, old, subject)
 	if err != nil {
 		return err
 	}
@@ -251,14 +278,14 @@ func (repo *{{ .RepositoryStructName }}) Update(ctx context.Context, subject *{{
 }
 
 // UpdateWithTx トランザクション中の {{ .StructName }} の更新処理を行う
-func (repo *{{ .RepositoryStructName }}) UpdateWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }}) error {
+func (repo *{{ .RepositoryStructName }}) UpdateWithTx(ctx context.Context, tx *dynamo.WriteTx, subject *{{ .StructName }}) error {
 	getTx := repo.db.GetTx()
 	old, err := repo.GetWithTx(getTx, subject.{{ .HashKeyFieldName }}{{ if ne .RangeKeyFieldName "" }}, subject.{{ .RangeKeyFieldName }}{{ end }})
 	if err != nil {
 		return xerrors.Errorf("error in GetWithTx method: %w", err)
 	}
 
-	query, err := repo.updateQuery(old, subject)
+	query, err := repo.updateQuery(ctx, old, subject)
 	if err != nil {
 		return err
 	}
@@ -270,7 +297,16 @@ func (repo *{{ .RepositoryStructName }}) UpdateWithTx(tx *dynamo.WriteTx, subjec
 	return nil
 }
 
-func (repo *{{ .RepositoryStructName }}) forceUpdateQuery(subject *{{ .StructName }}) *dynamo.Update {
+func (repo *{{ .RepositoryStructName }}) forceUpdateQuery(ctx context.Context, subject *{{ .StructName }}) (*dynamo.Update, error) {
+	for _, m := range repo.middleware {
+		c, err := m.BeforeUpdate(ctx, subject)
+		if err != nil {
+			return nil, err
+		}
+		if !c {
+			continue
+		}
+	}
 	return repo.table.Update(repo.hashPair(subject)){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", subject.{{ .RangeKeyFieldName }}){{ end }}.
 {{- range $i, $fi := .FieldInfos }}
 {{- if and ( ne $fi.Field $created ) ( ne $fi.Field $updated )}}
@@ -280,37 +316,99 @@ func (repo *{{ .RepositoryStructName }}) forceUpdateQuery(subject *{{ .StructNam
 {{- if eq .EnableUpdateTime true }}
 		Set("{{ .UpdateTimeDynamoTag }}", {{ Now .UpdateTimeType }}).
 {{- end }}
-		If("attribute_exists($)", "{{ .HashKeyFieldTagName }}")
+		If("attribute_exists($)", "{{ .HashKeyFieldTagName }}"), nil
 }
 
 // ForceUpdate 処理中の Task の更新処理一切の責任を持ち、これを行う
 func (repo *{{ .RepositoryStructName }}) ForceUpdate(ctx context.Context, subject *{{ .StructName }}) error {
-	return repo.forceUpdateQuery(subject).RunWithContext(ctx)
+	q, err := repo.forceUpdateQuery(ctx, subject)
+	if err != nil {
+		return err
+	}
+
+	return q.RunWithContext(ctx)
 }
 
 // ForceUpdateWithTx トランザクション中の Task の更新クエリを発行する
-func (repo *{{ .RepositoryStructName }}) ForceUpdateWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }}) {
-	tx.Update(repo.forceUpdateQuery(subject))
+func (repo *{{ .RepositoryStructName }}) ForceUpdateWithTx(ctx context.Context, tx *dynamo.WriteTx, subject *{{ .StructName }}) error {
+	for _, m := range repo.middleware {
+		c, err := m.BeforeUpdate(ctx, subject)
+		if err != nil {
+			return err
+		}
+		if !c {
+			continue
+		}
+	}
+	q, err := repo.forceUpdateQuery(ctx, subject)
+	if err != nil {
+		return err
+	}
+
+	tx.Update(q)
+	return nil
 }
 
 // Delete 処理中の {{ .StructName }} の削除処理一切の責任を持ち、これを行う
 func (repo *{{ .RepositoryStructName }}) Delete(ctx context.Context, subject *{{ .StructName }}) error {
+	for _, m := range repo.middleware {
+		c, err := m.BeforeDelete(ctx, subject)
+		if err != nil {
+			return err
+		}
+		if !c {
+			continue
+		}
+	}
+
 	return repo.table.Delete(repo.hashPair(subject)){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", subject.{{ .RangeKeyFieldName }}){{ end }}.RunWithContext(ctx)
 }
 
 // DeleteBy{{ .HashKeyFieldName }} 処理中の {{ .StructName }} の{{ .HashKeyFieldName }}から削除処理一切の責任を持ち、これを行う
 func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}) error {
+	for _, m := range repo.middleware {
+		c, err := m.BeforeDeleteBy{{ FuncNameByValue }}(ctx, {{ .HashKeyValueName }})
+		if err != nil {
+			return err
+		}
+		if !c {
+			continue
+		}
+	}
+
 	return repo.table.Delete("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", {{ .RangeKeyValueName }}){{ end }}.RunWithContext(ctx)
 }
 
 // DeleteWithTx トランザクション中の {{ .StructName }} の削除処理を行う
-func (repo *{{ .RepositoryStructName }}) DeleteWithTx(tx *dynamo.WriteTx, subject *{{ .StructName }}) {
+func (repo *{{ .RepositoryStructName }}) DeleteWithTx(ctx context.Context, tx *dynamo.WriteTx, subject *{{ .StructName }}) error {
+	for _, m := range repo.middleware {
+		c, err := m.BeforeDelete(ctx, subject)
+		if err != nil {
+			return err
+		}
+		if !c {
+			continue
+		}
+	}
+
 	tx.Delete(repo.table.Delete(repo.hashPair(subject)){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", subject.{{ .RangeKeyFieldName }}){{ end }})
+	return nil
 }
 
 // DeleteBy{{ .HashKeyFieldName }}WithTx トランザクション中の {{ .StructName }} の{{ .HashKeyFieldName }}から削除処理を行う
-func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}WithTx(tx *dynamo.WriteTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}) {
+func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}WithTx(ctx context.Context, tx *dynamo.WriteTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}) error {
+	for _, m := range repo.middleware {
+		c, err := m.BeforeDeleteBy{{ FuncNameByValue }}(ctx, {{ .HashKeyValueName }})
+		if err != nil {
+			return err
+		}
+		if !c {
+			continue
+		}
+	}
+
 	tx.Delete(repo.table.Delete("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", {{ .RangeKeyValueName }}){{ end }})
+	return nil
 }
 
 // GetMulti 処理中の {{ .StructName }} の一括取得処理一切の責任を持ち、これを行う
@@ -329,7 +427,7 @@ func (repo *{{ .RepositoryStructName }}) GetMulti(ctx context.Context, {{ RangeK
 func (repo *{{ .RepositoryStructName }}) InsertMulti(ctx context.Context, subjects []*{{ .StructName }}) error {
 	tx := repo.db.WriteTx()
 	for _, subject := range subjects {
-		if err := repo.InsertWithTx(tx, subject); err != nil {
+		if err := repo.InsertWithTx(ctx, tx, subject); err != nil {
 			return xerrors.Errorf("error in InsertWithTx method: %w", err)
 		}
 	}
@@ -340,7 +438,10 @@ func (repo *{{ .RepositoryStructName }}) InsertMulti(ctx context.Context, subjec
 func (repo *{{ .RepositoryStructName }}) UpdateMulti(ctx context.Context, subjects []*{{ .StructName }}) error {
 	tx := repo.db.WriteTx()
 	for _, subject := range subjects {
-		repo.ForceUpdateWithTx(tx, subject)
+		err := repo.ForceUpdateWithTx(ctx, tx, subject)
+		if err != nil {
+			return err
+		}
 	}
 	return tx.RunWithContext(ctx)
 }
@@ -349,7 +450,10 @@ func (repo *{{ .RepositoryStructName }}) UpdateMulti(ctx context.Context, subjec
 func (repo *{{ .RepositoryStructName }}) DeleteMulti(ctx context.Context, subjects []*{{ .StructName }}) error {
 	tx := repo.db.WriteTx()
 	for _, subject := range subjects {
-		repo.DeleteWithTx(tx, subject)
+		err := repo.DeleteWithTx(ctx, tx, subject)
+		if err != nil {
+			return err
+		}
 	}
 	return tx.RunWithContext(ctx)
 }
@@ -358,7 +462,10 @@ func (repo *{{ .RepositoryStructName }}) DeleteMulti(ctx context.Context, subjec
 func (repo *{{ .RepositoryStructName }}) DeleteMultiBy{{ PluralForm FuncNameByValue }}(ctx context.Context, {{ RangeKeyArgCheckPairs }}) error {
 	tx := repo.db.WriteTx()
 	for {{ RangeKeyForTerms }} {
-		repo.DeleteBy{{ FuncNameByValue }}WithTx(tx, {{ if ne .RangeKeyFieldName "" }}key, value{{ else }}{{ .HashKeyFieldTagName }}{{ end }})
+		err := repo.DeleteBy{{ FuncNameByValue }}WithTx(ctx , tx, {{ if ne .RangeKeyFieldName "" }}key, value{{ else }}{{ .HashKeyFieldTagName }}{{ end }})
+		if err != nil {
+			return err
+		}
 	}
 	return tx.RunWithContext(ctx)
 }
