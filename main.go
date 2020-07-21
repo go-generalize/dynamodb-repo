@@ -16,15 +16,15 @@ import (
 )
 
 var (
-	prefix      = flag.String("prefix", "", "Prefix for table name")
-	disableMeta = flag.Bool("disable-meta", false, "Disable meta embed for Lock")
-	version     = flag.Bool("v", false, "print version")
+	prefix        = flag.String("prefix", "", "Prefix for table name")
+	disableMeta   = flag.Bool("disable-meta", false, "Disable meta embed for Lock")
+	isShowVersion = flag.Bool("v", false, "print version")
 )
 
 func main() {
 	flag.Parse()
 
-	if *version {
+	if *isShowVersion {
 		fmt.Printf("DynamoDB Model Generator: %s\n", AppVersion)
 		return
 	}
