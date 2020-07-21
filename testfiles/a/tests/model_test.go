@@ -1,4 +1,4 @@
-// / / +build internal
+//+build internal
 
 package tests
 
