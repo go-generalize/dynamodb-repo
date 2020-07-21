@@ -15,12 +15,13 @@ import (
 	"golang.org/x/xerrors"
 )
 
-func main() {
-	var (
-		prefix  = flag.String("prefix", "", "Prefix for table name")
-		version = flag.Bool("v", false, "print version")
-	)
+var (
+	prefix      = flag.String("prefix", "", "Prefix for table name")
+	disableMeta = flag.Bool("disable-meta", false, "Disable meta embed for Lock")
+	version     = flag.Bool("v", false, "print version")
+)
 
+func main() {
 	flag.Parse()
 
 	if *version {
@@ -35,12 +36,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := run(flag.Arg(0), *prefix); err != nil {
+	if err := run(flag.Arg(0), *prefix, *disableMeta); err != nil {
 		log.Fatal(err.Error())
 	}
 }
 
-func run(structName, prefix string) error {
+func run(structName, prefix string, isDisableMeta bool) error {
+	disableMeta = &isDisableMeta
 	fs := token.NewFileSet()
 	pkgs, err := parser.ParseDir(fs, ".", nil, parser.AllErrors)
 
@@ -103,12 +105,37 @@ func traverse(pkg *ast.Package, fs *token.FileSet, structName, prefix string) er
 }
 
 func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) error {
+	var metaList map[string]Field
+	if !*disableMeta {
+		var err error
+		fList := listAllField(structType.Fields, "", false)
+		metas, err := searchMetaProperties(fList)
+		if err != nil {
+			return err
+		}
+		metaList = make(map[string]Field)
+		for _, m := range metas {
+			metaList[m.Name] = m
+		}
+	}
+	gen.MetaFields = metaList
+
 	for _, field := range structType.Fields.List {
 		// structの各fieldを調査
-		if len(field.Names) != 1 {
+		if len(field.Names) > 1 {
 			return xerrors.New("`field.Names` must have only one element")
 		}
-		name := field.Names[0].Name
+		name := ""
+		if field.Names == nil || len(field.Names) == 0 {
+			switch field.Type.(type) {
+			case *ast.Ident:
+				name = field.Type.(*ast.Ident).Name
+			case *ast.SelectorExpr:
+				name = field.Type.(*ast.SelectorExpr).Sel.Name
+			}
+		} else {
+			name = field.Names[0].Name
+		}
 
 		pos := fs.Position(field.Pos()).String()
 

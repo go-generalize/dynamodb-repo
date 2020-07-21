@@ -31,11 +31,15 @@ func TestGenerator(t *testing.T) {
 			tr.Fatalf("chdir failed: %+v", err)
 		}
 
-		if err := run("Task", "Prefix"); err != nil {
+		if err := run("Task", "Prefix", true); err != nil {
 			tr.Fatalf("failed to generate for testfiles/a: %+v", err)
 		}
 
-		if err := run("Name", ""); err != nil {
+		if err := run("Name", "", true); err != nil {
+			tr.Fatalf("failed to generate for testfiles/a: %+v", err)
+		}
+
+		if err := run("Lock", "", false); err != nil {
 			tr.Fatalf("failed to generate for testfiles/a: %+v", err)
 		}
 

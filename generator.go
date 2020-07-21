@@ -72,6 +72,8 @@ type generator struct {
 	UpdateTimeDynamoTag string
 	UpdateTimeType      string
 	EnableDDA           bool
+
+	MetaFields map[string]Field
 }
 
 func (g *generator) setting() {
@@ -162,6 +164,10 @@ func (g *generator) setFuncMap() template.FuncMap {
 		},
 		"PluralForm": func(word string) string {
 			return plural.Convert(word)
+		},
+		"HasKey": func(fields map[string]Field, key string) bool {
+			_, ok := fields[key]
+			return ok
 		},
 	}
 }

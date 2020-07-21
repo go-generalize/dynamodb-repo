@@ -5,7 +5,7 @@ package {{ .PackageName }}
 import (
 	"context"
 	"reflect"
-{{- if or ( eq .EnableCreateTime true ) ( eq .EnableUpdateTime true )}}
+{{- if or (or ( eq .EnableCreateTime true ) ( eq .EnableUpdateTime true ) .MetaFields ) }}
 	"time"
 {{- end }}
 {{- range .ImportList }}
@@ -80,7 +80,18 @@ func (repo *{{ .RepositoryStructName }}) GetTableName() string {
 func (repo *{{ .RepositoryStructName }}) hashPair(subject *{{ .StructName }}) (string, interface{}) {
 	return "{{ .HashKeyFieldTagName }}", subject.{{ .HashKeyFieldName }}
 }
+{{ if .MetaFields }}
+// setMeta メタデータを設定する(Insert以外ではCreatedAtを設定しない)
+func (repo *{{ .RepositoryStructName }}) setMeta(subject *{{ .StructName }}, isInsert bool) {
+	now := time.Now()
 
+	if isInsert {
+		subject.CreatedAt = now
+	}
+	subject.UpdatedAt = now
+	subject.Version += 1
+}
+{{ end }}
 // List ハッシュキーやGSIを利用した検索を行う
 // GSIを利用した場合、ListにはGSIが適用されている属性の名前と値を指定し、必ずIndexでインデックス名を指定する必要がある
 func (repo *{{ .RepositoryStructName }}) List(name string, value interface{}) *dynamo.Query {
@@ -136,7 +147,14 @@ func (repo *{{ .RepositoryStructName }}) insertQuery(subject *{{ .StructName }})
 	query := repo.table.Put(subject)
 	return query.If("attribute_not_exists($)", "{{ .HashKeyFieldTagName }}")
 }
-
+{{ if .MetaFields }}
+func (repo *{{ .RepositoryStructName }}) beforeInsert(subject *{{ .StructName }}) error {
+	if subject.Version != 0 {
+		return xerrors.Errorf("insert data must be Version == 0: %+v", subject)
+	}
+	return nil
+}
+{{ end }}
 // Insert 処理中の {{ .StructName }} の登録処理一切の責任を持ち、これを行う
 func (repo *{{ .RepositoryStructName }}) Insert(ctx context.Context, subject *{{ .StructName }}) error {
 {{- if eq .AutoGeneration true }}
@@ -149,6 +167,12 @@ func (repo *{{ .RepositoryStructName }}) Insert(ctx context.Context, subject *{{
 {{- end }}
 		return xerrors.New("{{ .HashKeyFieldName }} is required")
 	}
+{{- if .MetaFields }}
+	if err := repo.beforeInsert(subject); err != nil {
+		return err
+	}
+{{- end  }}
+
 {{- end }}
 	return repo.insertQuery(subject).RunWithContext(ctx)
 }
@@ -166,11 +190,17 @@ func (repo *{{ .RepositoryStructName }}) InsertWithTx(tx *dynamo.WriteTx, subjec
 		return xerrors.New("{{ .HashKeyFieldName }} is required")
 	}
 {{- end }}
+{{- if .MetaFields }}
+	if err := repo.beforeInsert(subject); err != nil {
+		return err
+	}
+{{- end  }}
+
 	tx.Put(repo.insertQuery(subject))
 	return nil
 }
 
-func (repo *{{ .RepositoryStructName }}) updateQuery(old, subject *{{ .StructName }}) *dynamo.Update {
+func (repo *{{ .RepositoryStructName }}) updateQuery(old, subject *{{ .StructName }}) (*dynamo.Update, error) {
 	updated := map[string]interface{}{}
 	{{- $created := .CreateTimeName }}
 	{{- $updated := .UpdateTimeName }}
@@ -183,9 +213,14 @@ func (repo *{{ .RepositoryStructName }}) updateQuery(old, subject *{{ .StructNam
 {{- end }}
 {{- end }}
 	if len(updated) == 0 {
-		return nil
+		return nil, nil
 	}
-
+{{ if .MetaFields }}
+	if old.Version > subject.Version {
+		return nil, xerrors.Errorf("The data in the database is newer: (db version: %d, target version: %d) %+v",
+			old.Version, subject.Version, subject)
+	}
+{{ end }}
 	query := repo.table.Update(repo.hashPair(subject)){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", subject.{{ .RangeKeyFieldName }}){{ end }}
 	for path, v := range updated {
 		query.Set(path, v)
@@ -194,7 +229,7 @@ func (repo *{{ .RepositoryStructName }}) updateQuery(old, subject *{{ .StructNam
 {{- if eq .EnableUpdateTime true }}
 	query.Set("{{ .UpdateTimeDynamoTag }}", {{ Now .UpdateTimeType }})
 {{- end }}
-	return query.If("attribute_exists($)", "{{ .HashKeyFieldTagName }}")
+	return query.If("attribute_exists($)", "{{ .HashKeyFieldTagName }}"), nil
 }
 
 // Update 処理中の {{ .StructName }} の更新処理一切の責任を持ち、これを行う
@@ -204,7 +239,10 @@ func (repo *{{ .RepositoryStructName }}) Update(ctx context.Context, subject *{{
 		return xerrors.Errorf("error in Get method: %w", err)
 	}
 
-	query := repo.updateQuery(old, subject)
+	query, err := repo.updateQuery(old, subject)
+	if err != nil {
+		return err
+	}
 	if query == nil {
 		return ErrNoDifference
 	}
@@ -220,7 +258,10 @@ func (repo *{{ .RepositoryStructName }}) UpdateWithTx(tx *dynamo.WriteTx, subjec
 		return xerrors.Errorf("error in GetWithTx method: %w", err)
 	}
 
-	query := repo.updateQuery(old, subject)
+	query, err := repo.updateQuery(old, subject)
+	if err != nil {
+		return err
+	}
 	if query == nil {
 		return ErrNoDifference
 	}

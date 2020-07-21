@@ -2,7 +2,7 @@ package model
 
 import dda "github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 
-//go:generate dynamodb-repo Name
+//go:generate dynamodb-repo -disable-meta Name
 
 type CustomStruct struct {
 	Value int
