@@ -84,22 +84,11 @@ func (repo *{{ .RepositoryStructName }}) hashPair(subject *{{ .StructName }}) (s
 // setMeta メタデータを設定する(Insert以外ではCreatedAtを設定しない)
 func (repo *{{ .RepositoryStructName }}) setMeta(subject *{{ .StructName }}, isInsert bool) {
 	now := time.Now()
-{{- $hasCreatedBy := HasKey .MetaFields "CreatedBy" }}
-{{- $hasUpdatedBy := HasKey .MetaFields "UpdatedBy" }}
-{{- if or $hasCreatedBy $hasUpdatedBy }}
-	by := now.Format(time.RFC3339)
-{{- end }}
 
 	if isInsert {
 		subject.CreatedAt = now
-{{- if $hasCreatedBy }}
-		subject.CreatedBy = by
-{{- end }}
 	}
 	subject.UpdatedAt = now
-{{- if $hasUpdatedBy }}
-	subject.UpdatedBy = by
-{{- end }}
 	subject.Version += 1
 }
 {{ end }}
@@ -179,7 +168,7 @@ func (repo *{{ .RepositoryStructName }}) Insert(ctx context.Context, subject *{{
 		return xerrors.New("{{ .HashKeyFieldName }} is required")
 	}
 {{- if .MetaFields }}
-	if err := repo.beforeInsert(subject); err != nil{
+	if err := repo.beforeInsert(subject); err != nil {
 		return err
 	}
 {{- end  }}
@@ -202,7 +191,7 @@ func (repo *{{ .RepositoryStructName }}) InsertWithTx(tx *dynamo.WriteTx, subjec
 	}
 {{- end }}
 {{- if .MetaFields }}
-	if err := repo.beforeInsert(subject); err != nil{
+	if err := repo.beforeInsert(subject); err != nil {
 		return err
 	}
 {{- end  }}
