@@ -25,7 +25,7 @@ import (
 
 type {{ .RepositoryInterfaceName }} interface {
 	// Single
-	Get(cx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}) (*{{ .StructName }}, error)
+	Get(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}) (*{{ .StructName }}, error)
 	Insert(ctx context.Context, subject *{{ .StructName }}) error
 	Update(ctx context.Context, subject *{{ .StructName }}) error
 	ForceUpdate(ctx context.Context, subject *{{ .StructName }}) error
