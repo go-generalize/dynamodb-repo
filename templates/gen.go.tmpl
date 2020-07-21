@@ -169,7 +169,7 @@ func (repo *{{ .RepositoryStructName }}) beforeInsert(ctx context.Context, subje
 	for _, m := range repo.middleware {
 		c, err := m.BeforeInsert(ctx, subject)
 		if err != nil {
-			return err
+			return xerrors.Errorf("beforeInsert.middleware error: :%w", err)
 		}
 		if !c {
 			continue
@@ -192,7 +192,7 @@ func (repo *{{ .RepositoryStructName }}) Insert(ctx context.Context, subject *{{
 	}
 {{- end }}
 	if err := repo.beforeInsert(ctx, subject); err != nil {
-		return err
+		return xerrors.Errorf("Insert.beforeInsert error: :%w", err)
 	}
 
 	return repo.insertQuery(subject).RunWithContext(ctx)
@@ -212,7 +212,7 @@ func (repo *{{ .RepositoryStructName }}) InsertWithTx(ctx context.Context, tx *d
 	}
 {{- end }}
 	if err := repo.beforeInsert(ctx, subject); err != nil {
-		return err
+		return xerrors.Errorf("InsertWithTx.beforeInsert error: :%w", err)
 	}
 
 	tx.Put(repo.insertQuery(subject))
@@ -270,7 +270,7 @@ func (repo *{{ .RepositoryStructName }}) Update(ctx context.Context, subject *{{
 
 	query, err := repo.updateQuery(ctx, old, subject)
 	if err != nil {
-		return err
+		return xerrors.Errorf("Update.updateQuery error: :%w", err)
 	}
 	if query == nil {
 		return ErrNoDifference
@@ -289,7 +289,7 @@ func (repo *{{ .RepositoryStructName }}) UpdateWithTx(ctx context.Context, tx *d
 
 	query, err := repo.updateQuery(ctx, old, subject)
 	if err != nil {
-		return err
+		return xerrors.Errorf("UpdateWithTx.updateQuery error: :%w", err)
 	}
 	if query == nil {
 		return ErrNoDifference
@@ -325,7 +325,7 @@ func (repo *{{ .RepositoryStructName }}) forceUpdateQuery(ctx context.Context, s
 func (repo *{{ .RepositoryStructName }}) ForceUpdate(ctx context.Context, subject *{{ .StructName }}) error {
 	q, err := repo.forceUpdateQuery(ctx, subject)
 	if err != nil {
-		return err
+		return xerrors.Errorf("ForceUpdate.forceUpdateQuery error: :%w", err)
 	}
 
 	return q.RunWithContext(ctx)
@@ -336,7 +336,7 @@ func (repo *{{ .RepositoryStructName }}) ForceUpdateWithTx(ctx context.Context, 
 	for _, m := range repo.middleware {
 		c, err := m.BeforeUpdate(ctx, subject)
 		if err != nil {
-			return err
+			return xerrors.Errorf("ForceUpdateWithTx.BeforeUpdate error: :%w", err)
 		}
 		if !c {
 			continue
@@ -344,7 +344,7 @@ func (repo *{{ .RepositoryStructName }}) ForceUpdateWithTx(ctx context.Context, 
 	}
 	q, err := repo.forceUpdateQuery(ctx, subject)
 	if err != nil {
-		return err
+		return xerrors.Errorf("ForceUpdateWithTx.forceUpdateQuery error: :%w", err)
 	}
 
 	tx.Update(q)
@@ -356,7 +356,7 @@ func (repo *{{ .RepositoryStructName }}) Delete(ctx context.Context, subject *{{
 	for _, m := range repo.middleware {
 		c, err := m.BeforeDelete(ctx, subject)
 		if err != nil {
-			return err
+			return xerrors.Errorf("Delete.BeforeDelete error: :%w", err)
 		}
 		if !c {
 			continue
@@ -371,7 +371,7 @@ func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}(ctx conte
 	for _, m := range repo.middleware {
 		c, err := m.BeforeDeleteBy{{ FuncNameByValue }}(ctx, {{ .HashKeyValueName }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }}{{ end }})
 		if err != nil {
-			return err
+			return xerrors.Errorf("DeleteBy.BeforeDeleteBy{{ FuncNameByValue }} error: :%w", err)
 		}
 		if !c {
 			continue
@@ -386,7 +386,7 @@ func (repo *{{ .RepositoryStructName }}) DeleteWithTx(ctx context.Context, tx *d
 	for _, m := range repo.middleware {
 		c, err := m.BeforeDelete(ctx, subject)
 		if err != nil {
-			return err
+			return xerrors.Errorf("DeleteWithTx.BeforeDelete error: :%w", err)
 		}
 		if !c {
 			continue
@@ -402,7 +402,7 @@ func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}WithTx(ctx
 	for _, m := range repo.middleware {
 		c, err := m.BeforeDeleteBy{{ FuncNameByValue }}(ctx, {{ .HashKeyValueName }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }}{{ end }})
 		if err != nil {
-			return err
+			return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}WithTx.BeforeDeleteBy{{ FuncNameByValue }} error: :%w", err)
 		}
 		if !c {
 			continue
@@ -442,7 +442,7 @@ func (repo *{{ .RepositoryStructName }}) UpdateMulti(ctx context.Context, subjec
 	for _, subject := range subjects {
 		err := repo.ForceUpdateWithTx(ctx, tx, subject)
 		if err != nil {
-			return err
+			return xerrors.Errorf("UpdateMulti.ForceUpdateWithTx error: :%w", err)
 		}
 	}
 	return tx.RunWithContext(ctx)
@@ -454,7 +454,7 @@ func (repo *{{ .RepositoryStructName }}) DeleteMulti(ctx context.Context, subjec
 	for _, subject := range subjects {
 		err := repo.DeleteWithTx(ctx, tx, subject)
 		if err != nil {
-			return err
+			return xerrors.Errorf("deleteMulti.DeleteWithTx error: :%w", err)
 		}
 	}
 	return tx.RunWithContext(ctx)
@@ -466,7 +466,7 @@ func (repo *{{ .RepositoryStructName }}) DeleteMultiBy{{ PluralForm FuncNameByVa
 	for {{ RangeKeyForTerms }} {
 		err := repo.DeleteBy{{ FuncNameByValue }}WithTx(ctx , tx, {{ if ne .RangeKeyFieldName "" }}key, value{{ else }}{{ .HashKeyFieldTagName }}{{ end }})
 		if err != nil {
-			return err
+			return xerrors.Errorf("DeleteMultiBy{{ PluralForm FuncNameByValue }}.DeleteBy{{ FuncNameByValue }}WithTx error: :%w", err)
 		}
 	}
 	return tx.RunWithContext(ctx)
