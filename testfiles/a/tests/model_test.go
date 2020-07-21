@@ -1,4 +1,4 @@
-// +build internal
+// / / +build internal
 
 package tests
 
@@ -266,13 +266,13 @@ func TestDynamoDBTask(t *testing.T) {
 				tr.Fatalf("%+v", err)
 			}
 			task.Count++
-			if err := taskRepo.UpdateWithTx(tx, task); err != nil {
+			if err := taskRepo.UpdateWithTx(ctx, tx, task); err != nil {
 				return xerrors.Errorf("error in UpdateWithTx method: %w", err)
 			}
 
 			task.ID = 1002
 			task.Count-- // revert
-			if err := taskRepo.InsertWithTx(tx, task); err != nil {
+			if err := taskRepo.InsertWithTx(ctx, tx, task); err != nil {
 				return xerrors.Errorf("error in InsertWithTx method: %w", err)
 			}
 			return nil
