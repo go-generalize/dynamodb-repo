@@ -5,9 +5,7 @@ package {{ .PackageName }}
 import (
 	"context"
 	"reflect"
-{{- if or (or ( eq .EnableCreateTime true ) ( eq .EnableUpdateTime true ) .MetaFields ) }}
 	"time"
-{{- end }}
 {{- range .ImportList }}
 	"{{ .Name }}"
 {{- end }}
@@ -59,8 +57,8 @@ type {{ .RepositoryInterfaceName }} interface {
 type {{ $middlewareName }} interface {
 	BeforeInsert(ctx context.Context, subject *{{ .StructName }}) (bool, error)
 	BeforeUpdate(ctx context.Context, subject *{{ .StructName }}) (bool, error)
-	BeforeDelete(ctx context.Context, subject *{{ .StructName }}) (bool, error)
-	BeforeDeleteBy{{ FuncNameByValue }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}) (bool, error)
+	BeforeDelete(ctx context.Context, subject *{{ .StructName }}, options... DeleteOption) (bool, error)
+	BeforeDeleteBy{{ FuncNameByValue }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options... DeleteOption) (bool, error)
 }
 
 type {{ .RepositoryStructName }} struct {
@@ -106,7 +104,7 @@ func (repo *{{ .RepositoryStructName }}) setMeta(subject *{{ .StructName }}, isI
 {{ end }}
 
 // getNowPointer 現在のTime.timeポインターを返す
-func (repo *lockRepository) getNowPointer() *time.Time {
+func (repo *{{ .RepositoryStructName }}) getNowPointer() *time.Time {
 	t := time.Now()
 	return &t
 }
@@ -385,7 +383,7 @@ func (repo *{{ .RepositoryStructName }}) ForceUpdateWithTx(ctx context.Context, 
 // Delete 処理中の {{ .StructName }} の削除処理一切の責任を持ち、これを行う
 func (repo *{{ .RepositoryStructName }}) Delete(ctx context.Context, subject *{{ .StructName }}, options... DeleteOption) error {
 	for _, m := range repo.middleware {
-		c, err := m.BeforeDelete(ctx, subject)
+		c, err := m.BeforeDelete(ctx, subject, options...)
 		if err != nil {
 			return xerrors.Errorf("Delete.BeforeDelete error: %w", err)
 		}
@@ -410,7 +408,7 @@ func (repo *{{ .RepositoryStructName }}) Delete(ctx context.Context, subject *{{
 // DeleteBy{{ .HashKeyFieldName }} 処理中の {{ .StructName }} の{{ .HashKeyFieldName }}から削除処理一切の責任を持ち、これを行う
 func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options... DeleteOption) error {
 	for _, m := range repo.middleware {
-		c, err := m.BeforeDeleteBy{{ FuncNameByValue }}(ctx, {{ .HashKeyValueName }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }}{{ end }})
+		c, err := m.BeforeDeleteBy{{ FuncNameByValue }}(ctx, {{ .HashKeyValueName }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }}{{ end }}, options...)
 		if err != nil {
 			return xerrors.Errorf("DeleteBy.BeforeDeleteBy{{ FuncNameByValue }} error: %w", err)
 		}
@@ -440,7 +438,7 @@ func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}(ctx conte
 // DeleteWithTx トランザクション中の {{ .StructName }} の削除処理を行う
 func (repo *{{ .RepositoryStructName }}) DeleteWithTx(ctx context.Context, tx *dynamo.WriteTx, subject *{{ .StructName }}, options... DeleteOption) error {
 	for _, m := range repo.middleware {
-		c, err := m.BeforeDelete(ctx, subject)
+		c, err := m.BeforeDelete(ctx, subject, options...)
 		if err != nil {
 			return xerrors.Errorf("DeleteWithTx.BeforeDelete error: %w", err)
 		}
@@ -467,7 +465,7 @@ func (repo *{{ .RepositoryStructName }}) DeleteWithTx(ctx context.Context, tx *d
 // DeleteBy{{ .HashKeyFieldName }}WithTx トランザクション中の {{ .StructName }} の{{ .HashKeyFieldName }}から削除処理を行う
 func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}WithTx(ctx context.Context, tx *dynamo.WriteTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options... DeleteOption) error {
 	for _, m := range repo.middleware {
-		c, err := m.BeforeDeleteBy{{ FuncNameByValue }}(ctx, {{ .HashKeyValueName }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }}{{ end }})
+		c, err := m.BeforeDeleteBy{{ FuncNameByValue }}(ctx, {{ .HashKeyValueName }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }}{{ end }}, options...)
 		if err != nil {
 			return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}WithTx.BeforeDeleteBy{{ FuncNameByValue }} error: %w", err)
 		}
