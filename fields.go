@@ -12,13 +12,16 @@ type Field struct {
 	Type       string
 	ParentPath string
 	IsEmbed    bool
+	IsPointer  bool
 }
 
 type MetaField struct {
-	Require     bool
-	RequireType string
-	Find        bool
-	FindType    string
+	Require          bool
+	RequireType      string
+	Find             bool
+	FindType         string
+	RequireIsPointer bool
+	FindIsPointer    bool
 }
 
 func listAllField(field *ast.FieldList, parentName string, isEmbed bool) []Field {
@@ -28,6 +31,7 @@ func listAllField(field *ast.FieldList, parentName string, isEmbed bool) []Field
 		name := ""
 		typeName := ""
 		isCurrentEmbed := false
+		isPointer := false
 
 		switch f.Type.(type) {
 		case *ast.Ident:
@@ -43,6 +47,7 @@ func listAllField(field *ast.FieldList, parentName string, isEmbed bool) []Field
 		case *ast.StarExpr:
 			t := f.Type.(*ast.StarExpr)
 			if xSel, ok := t.X.(*ast.SelectorExpr); ok {
+				isPointer = true
 				if x, ok := xSel.X.(*ast.Ident); ok {
 					typeName = fmt.Sprintf("%s.%s",
 						x.Name, xSel.Sel.Name)
@@ -68,6 +73,7 @@ func listAllField(field *ast.FieldList, parentName string, isEmbed bool) []Field
 			Type:       typeName,
 			ParentPath: parentName,
 			IsEmbed:    isEmbed,
+			IsPointer:  isPointer,
 		})
 
 		t, ok := f.Type.(*ast.Ident)
@@ -119,8 +125,9 @@ func searchMetaProperties(fields []Field) ([]Field, error) {
 			RequireType: "string",
 		},
 		"DeletedAt": {
-			Require:     true,
-			RequireType: "time.Time",
+			Require:          true,
+			RequireType:      "time.Time",
+			RequireIsPointer: true,
 		},
 		"DeletedBy": {
 			Require:     false,
@@ -139,6 +146,7 @@ func searchMetaProperties(fields []Field) ([]Field, error) {
 			res = append(res, f)
 			m.Find = true
 			m.FindType = f.Type
+			m.FindIsPointer = f.IsPointer
 		}
 	}
 
@@ -148,6 +156,13 @@ func searchMetaProperties(fields []Field) ([]Field, error) {
 		}
 		if t.Find && t.RequireType != t.FindType {
 			return nil, xerrors.Errorf("%s must be type %s", filedName, t.RequireType)
+		}
+		if t.Find && t.RequireIsPointer != t.FindIsPointer {
+			p := "pointer"
+			if !t.RequireIsPointer {
+				p = "not pointer"
+			}
+			return nil, xerrors.Errorf("%s must be %s", filedName, p)
 		}
 	}
 
