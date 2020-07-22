@@ -247,7 +247,12 @@ func (repo *{{ .RepositoryStructName }}) updateQuery(ctx context.Context, old, s
 	if len(updated) == 0 {
 		return nil, nil
 	}
-{{ if .MetaFields }}
+{{- if .MetaFields }}
+
+	if subject.DeletedAt != nil {
+		return nil, xerrors.Errorf("Updating 'DeletedAt' in Update is prohibited.: %+v", subject)
+	}
+
 	if old.Version > subject.Version {
 		return nil, xerrors.Errorf("The data in the database is newer: (db version: %d, target version: %d) %+v",
 			old.Version, subject.Version, subject)
@@ -322,6 +327,12 @@ func (repo *{{ .RepositoryStructName }}) forceUpdateQuery(ctx context.Context, s
 			continue
 		}
 	}
+{{- if .MetaFields }}
+
+	if subject.DeletedAt != nil {
+		return nil, xerrors.Errorf("Updating 'DeletedAt' in Update is prohibited.: %+v", subject)
+	}
+{{ end }}
 	return repo.table.Update(repo.hashPair(subject)){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", subject.{{ .RangeKeyFieldName }}){{ end }}.
 {{- range $i, $fi := .FieldInfos }}
 {{- if and ( ne $fi.Field $created ) ( ne $fi.Field $updated )}}
