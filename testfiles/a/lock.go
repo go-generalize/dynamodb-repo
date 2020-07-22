@@ -11,6 +11,8 @@ type Meta struct {
 	CreatedBy string
 	UpdatedAt time.Time
 	UpdatedBy string
+	DeletedAt *time.Time
+	DeletedBy string
 	Version   int
 }
 

@@ -40,6 +40,18 @@ func listAllField(field *ast.FieldList, parentName string, isEmbed bool) []Field
 			} else {
 				typeName = t.Sel.Name
 			}
+		case *ast.StarExpr:
+			t := f.Type.(*ast.StarExpr)
+			if xSel, ok := t.X.(*ast.SelectorExpr); ok {
+				if x, ok := xSel.X.(*ast.Ident); ok {
+					typeName = fmt.Sprintf("%s.%s",
+						x.Name, xSel.Sel.Name)
+				} else {
+					typeName = fmt.Sprintf("unknown: %+v", f.Type)
+				}
+			} else {
+				typeName = fmt.Sprintf("unknown: %+v", f.Type)
+			}
 		default:
 			typeName = fmt.Sprintf("unknown: %+v", f.Type)
 		}
@@ -103,6 +115,14 @@ func searchMetaProperties(fields []Field) ([]Field, error) {
 			RequireType: "time.Time",
 		},
 		"UpdatedBy": {
+			Require:     false,
+			RequireType: "string",
+		},
+		"DeletedAt": {
+			Require:     true,
+			RequireType: "time.Time",
+		},
+		"DeletedBy": {
 			Require:     false,
 			RequireType: "string",
 		},
