@@ -5,9 +5,7 @@ package {{ .PackageName }}
 import (
 	"context"
 	"reflect"
-{{- if or (or ( eq .EnableCreateTime true ) ( eq .EnableUpdateTime true ) .MetaFields ) }}
 	"time"
-{{- end }}
 {{- range .ImportList }}
 	"{{ .Name }}"
 {{- end }}
@@ -26,29 +24,29 @@ import (
 // {{ .RepositoryInterfaceName }} Repository of {{ .StructName }}
 type {{ .RepositoryInterfaceName }} interface {
 	// Single
-	Get(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}) (*{{ .StructName }}, error)
+	Get(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options... GetOption) (*{{ .StructName }}, error)
 	Insert(ctx context.Context, subject *{{ .StructName }}) error
 	Update(ctx context.Context, subject *{{ .StructName }}) error
 	ForceUpdate(ctx context.Context, subject *{{ .StructName }}) error
-	Delete(ctx context.Context, subject *{{ .StructName }}) error
-	DeleteBy{{ FuncNameByValue }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}) error
+	Delete(ctx context.Context, subject *{{ .StructName }}, options... DeleteOption) error
+	DeleteBy{{ FuncNameByValue }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options... DeleteOption) error
 	// Multiple
-	GetMulti(ctx context.Context, {{ RangeKeyArgCheckPairs }}) ([]*{{ .StructName }}, error)
+	GetMulti(ctx context.Context, {{ RangeKeyArgCheckPairs }}, options... GetOption) ([]*{{ .StructName }}, error)
 	InsertMulti(ctx context.Context, subjects []*{{ .StructName }}) error
 	UpdateMulti(ctx context.Context, subjects []*{{ .StructName }}) error
-	DeleteMulti(ctx context.Context, subjects []*{{ .StructName }}) error
-	DeleteMultiBy{{ PluralForm FuncNameByValue }}(ctx context.Context, {{ RangeKeyArgCheckPairs }}) error
+	DeleteMulti(ctx context.Context, subjects []*{{ .StructName }}, options... DeleteOption) error
+	DeleteMultiBy{{ PluralForm FuncNameByValue }}(ctx context.Context, {{ RangeKeyArgCheckPairs }}, options... DeleteOption) error
 	// Query
 	List(name string, value interface{}) *dynamo.Query
 	Scan() *dynamo.Scan
 	// Transaction
 	RunInTransaction(ctx context.Context, fn func(tx *dynamo.WriteTx) error) error
-	GetWithTx(tx *dynamo.GetTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}) (*{{ .StructName }}, error)
+	GetWithTx(tx *dynamo.GetTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options... GetOption) (*{{ .StructName }}, error)
 	InsertWithTx(ctx context.Context, tx *dynamo.WriteTx, subject *{{ .StructName }}) error
 	UpdateWithTx(ctx context.Context, tx *dynamo.WriteTx, subject *{{ .StructName }}) error
 	ForceUpdateWithTx(ctx context.Context, tx *dynamo.WriteTx, subject *{{ .StructName }}) error
-	DeleteWithTx(ctx context.Context, tx *dynamo.WriteTx, subject *{{ .StructName }}) error
-	DeleteBy{{ FuncNameByValue }}WithTx(ctx context.Context, tx *dynamo.WriteTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}) error
+	DeleteWithTx(ctx context.Context, tx *dynamo.WriteTx, subject *{{ .StructName }}, options... DeleteOption) error
+	DeleteBy{{ FuncNameByValue }}WithTx(ctx context.Context, tx *dynamo.WriteTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options... DeleteOption) error
 	// misc
 	GetTable() dynamo.Table
 	GetTableName() string
@@ -59,8 +57,8 @@ type {{ .RepositoryInterfaceName }} interface {
 type {{ $middlewareName }} interface {
 	BeforeInsert(ctx context.Context, subject *{{ .StructName }}) (bool, error)
 	BeforeUpdate(ctx context.Context, subject *{{ .StructName }}) (bool, error)
-	BeforeDelete(ctx context.Context, subject *{{ .StructName }}) (bool, error)
-	BeforeDeleteBy{{ FuncNameByValue }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}) (bool, error)
+	BeforeDelete(ctx context.Context, subject *{{ .StructName }}, options... DeleteOption) (bool, error)
+	BeforeDeleteBy{{ FuncNameByValue }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options... DeleteOption) (bool, error)
 }
 
 type {{ .RepositoryStructName }} struct {
@@ -104,6 +102,13 @@ func (repo *{{ .RepositoryStructName }}) setMeta(subject *{{ .StructName }}, isI
 	subject.Version += 1
 }
 {{ end }}
+
+// getNowPointer 現在のTime.timeポインターを返す
+func (repo *{{ .RepositoryStructName }}) getNowPointer() *time.Time {
+	t := time.Now()
+	return &t
+}
+
 // List ハッシュキーやGSIを利用した検索を行う
 // GSIを利用した場合、ListにはGSIが適用されている属性の名前と値を指定し、必ずIndexでインデックス名を指定する必要がある
 func (repo *{{ .RepositoryStructName }}) List(name string, value interface{}) *dynamo.Query {
@@ -117,18 +122,31 @@ func (repo *{{ .RepositoryStructName }}) Scan() *dynamo.Scan {
 }
 
 // Get 処理中の {{ .StructName }} の取得処理一切の責任を持ち、これを行う
-func (repo *{{ .RepositoryStructName }}) Get(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}) (*{{ .StructName }}, error) {
+func (repo *{{ .RepositoryStructName }}) Get(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options... GetOption) (*{{ .StructName }}, error) {
 	subject := new({{ .StructName }})
-	if err := repo.table.Get("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", dynamo.Equal, {{ .RangeKeyValueName }}){{ end }}.OneWithContext(ctx, &subject); err != nil {
+
+	q := repo.table.Get("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", dynamo.Equal, {{ .RangeKeyValueName }}){{ end }}
+{{- if .MetaFields }}
+	if len(options) == 0 || !options[0].IncludeSoftDeleted {
+		q.Filter("attribute_not_exists(DeletedAt) or DeletedAt = null")
+	}
+{{ end }}
+	if err := q.OneWithContext(ctx, &subject); err != nil {
 		return nil, xerrors.Errorf("error in Get method: %w", err)
 	}
 	return subject, nil
 }
 
 // GetWithTx トランザクション中の {{ .StructName }} の取得処理を行う
-func (repo *{{ .RepositoryStructName }}) GetWithTx(tx *dynamo.GetTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}) (*{{ .StructName }}, error) {
+func (repo *{{ .RepositoryStructName }}) GetWithTx(tx *dynamo.GetTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options... GetOption) (*{{ .StructName }}, error) {
 	subject := new({{ .StructName }})
+
 	query := repo.table.Get("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", dynamo.Equal, {{ .RangeKeyValueName }}){{ end }}
+{{- if .MetaFields }}
+	if len(options) == 0 || !options[0].IncludeSoftDeleted {
+		query.Filter("attribute_not_exists(DeletedAt) or DeletedAt = null")
+	}
+{{ end }}
 	tx.GetOne(query, &subject)
 	if err := tx.Run(); err != nil {
 		return nil, xerrors.Errorf("error in Run method: %w", err)
@@ -234,7 +252,12 @@ func (repo *{{ .RepositoryStructName }}) updateQuery(ctx context.Context, old, s
 	if len(updated) == 0 {
 		return nil, nil
 	}
-{{ if .MetaFields }}
+{{- if .MetaFields }}
+
+	if subject.DeletedAt != nil {
+		return nil, xerrors.Errorf("Updating 'DeletedAt' in Update is prohibited.: %+v", subject)
+	}
+
 	if old.Version > subject.Version {
 		return nil, xerrors.Errorf("The data in the database is newer: (db version: %d, target version: %d) %+v",
 			old.Version, subject.Version, subject)
@@ -309,6 +332,12 @@ func (repo *{{ .RepositoryStructName }}) forceUpdateQuery(ctx context.Context, s
 			continue
 		}
 	}
+{{- if .MetaFields }}
+
+	if subject.DeletedAt != nil {
+		return nil, xerrors.Errorf("Updating 'DeletedAt' in Update is prohibited.: %+v", subject)
+	}
+{{ end }}
 	return repo.table.Update(repo.hashPair(subject)){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", subject.{{ .RangeKeyFieldName }}){{ end }}.
 {{- range $i, $fi := .FieldInfos }}
 {{- if and ( ne $fi.Field $created ) ( ne $fi.Field $updated )}}
@@ -352,9 +381,9 @@ func (repo *{{ .RepositoryStructName }}) ForceUpdateWithTx(ctx context.Context, 
 }
 
 // Delete 処理中の {{ .StructName }} の削除処理一切の責任を持ち、これを行う
-func (repo *{{ .RepositoryStructName }}) Delete(ctx context.Context, subject *{{ .StructName }}) error {
+func (repo *{{ .RepositoryStructName }}) Delete(ctx context.Context, subject *{{ .StructName }}, options... DeleteOption) error {
 	for _, m := range repo.middleware {
-		c, err := m.BeforeDelete(ctx, subject)
+		c, err := m.BeforeDelete(ctx, subject, options...)
 		if err != nil {
 			return xerrors.Errorf("Delete.BeforeDelete error: %w", err)
 		}
@@ -362,14 +391,24 @@ func (repo *{{ .RepositoryStructName }}) Delete(ctx context.Context, subject *{{
 			continue
 		}
 	}
+{{- if .MetaFields }}
 
+	if len(options) > 0 && options[0].Mode == DeleteModeSoft {
+		subject.DeletedAt = repo.getNowPointer()
+		q, err := repo.forceUpdateQuery(ctx, subject)
+		if err != nil {
+			return xerrors.Errorf("Delete.forceUpdateQuery Error: %w", err)
+		}
+		return q.RunWithContext(ctx)
+	}
+{{ end  }}
 	return repo.table.Delete(repo.hashPair(subject)){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", subject.{{ .RangeKeyFieldName }}){{ end }}.RunWithContext(ctx)
 }
 
 // DeleteBy{{ .HashKeyFieldName }} 処理中の {{ .StructName }} の{{ .HashKeyFieldName }}から削除処理一切の責任を持ち、これを行う
-func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}) error {
+func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options... DeleteOption) error {
 	for _, m := range repo.middleware {
-		c, err := m.BeforeDeleteBy{{ FuncNameByValue }}(ctx, {{ .HashKeyValueName }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }}{{ end }})
+		c, err := m.BeforeDeleteBy{{ FuncNameByValue }}(ctx, {{ .HashKeyValueName }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }}{{ end }}, options...)
 		if err != nil {
 			return xerrors.Errorf("DeleteBy.BeforeDeleteBy{{ FuncNameByValue }} error: %w", err)
 		}
@@ -377,14 +416,29 @@ func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}(ctx conte
 			continue
 		}
 	}
+{{- if .MetaFields }}
 
+	if len(options) > 0 && options[0].Mode == DeleteModeSoft {
+		subject, err := repo.Get(ctx, {{ .HashKeyValueName }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }}{{ end }})
+		if err != nil {
+			return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}.Get error: %w", err)
+		}
+
+		subject.DeletedAt = repo.getNowPointer()
+		q, err := repo.forceUpdateQuery(ctx, subject)
+		if err != nil {
+			return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}.forceUpdateQuery Error: %w", err)
+		}
+		return q.RunWithContext(ctx)
+	}
+{{ end  }}
 	return repo.table.Delete("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", {{ .RangeKeyValueName }}){{ end }}.RunWithContext(ctx)
 }
 
 // DeleteWithTx トランザクション中の {{ .StructName }} の削除処理を行う
-func (repo *{{ .RepositoryStructName }}) DeleteWithTx(ctx context.Context, tx *dynamo.WriteTx, subject *{{ .StructName }}) error {
+func (repo *{{ .RepositoryStructName }}) DeleteWithTx(ctx context.Context, tx *dynamo.WriteTx, subject *{{ .StructName }}, options... DeleteOption) error {
 	for _, m := range repo.middleware {
-		c, err := m.BeforeDelete(ctx, subject)
+		c, err := m.BeforeDelete(ctx, subject, options...)
 		if err != nil {
 			return xerrors.Errorf("DeleteWithTx.BeforeDelete error: %w", err)
 		}
@@ -392,15 +446,26 @@ func (repo *{{ .RepositoryStructName }}) DeleteWithTx(ctx context.Context, tx *d
 			continue
 		}
 	}
+{{- if .MetaFields }}
 
+	if len(options) > 0 && options[0].Mode == DeleteModeSoft {
+		subject.DeletedAt = repo.getNowPointer()
+		q, err := repo.forceUpdateQuery(ctx, subject)
+		if err != nil {
+			return xerrors.Errorf("DeleteWithTx.forceUpdateQuery Error: %w", err)
+		}
+		tx.Update(q)
+		return nil
+	}
+{{ end  }}
 	tx.Delete(repo.table.Delete(repo.hashPair(subject)){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", subject.{{ .RangeKeyFieldName }}){{ end }})
 	return nil
 }
 
 // DeleteBy{{ .HashKeyFieldName }}WithTx トランザクション中の {{ .StructName }} の{{ .HashKeyFieldName }}から削除処理を行う
-func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}WithTx(ctx context.Context, tx *dynamo.WriteTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}) error {
+func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}WithTx(ctx context.Context, tx *dynamo.WriteTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options... DeleteOption) error {
 	for _, m := range repo.middleware {
-		c, err := m.BeforeDeleteBy{{ FuncNameByValue }}(ctx, {{ .HashKeyValueName }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }}{{ end }})
+		c, err := m.BeforeDeleteBy{{ FuncNameByValue }}(ctx, {{ .HashKeyValueName }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }}{{ end }}, options...)
 		if err != nil {
 			return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}WithTx.BeforeDeleteBy{{ FuncNameByValue }} error: %w", err)
 		}
@@ -408,15 +473,31 @@ func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}WithTx(ctx
 			continue
 		}
 	}
+{{- if .MetaFields }}
 
+	if len(options) > 0 && options[0].Mode == DeleteModeSoft {
+		subject, err := repo.Get(ctx, {{ .HashKeyValueName }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }}{{ end }})
+		if err != nil {
+			return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}WithTx.Get error: %w", err)
+		}
+
+		subject.DeletedAt = repo.getNowPointer()
+		q, err := repo.forceUpdateQuery(ctx, subject)
+		if err != nil {
+			return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}WithTx.forceUpdateQuery Error: %w", err)
+		}
+		tx.Update(q)
+		return nil
+	}
+{{ end  }}
 	tx.Delete(repo.table.Delete("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", {{ .RangeKeyValueName }}){{ end }})
 	return nil
 }
 
 // GetMulti 処理中の {{ .StructName }} の一括取得処理一切の責任を持ち、これを行う
-func (repo *{{ .RepositoryStructName }}) GetMulti(ctx context.Context, {{ RangeKeyArgCheckPairs }}) (subjects []*{{ .StructName }}, err error) {
+func (repo *{{ .RepositoryStructName }}) GetMulti(ctx context.Context, {{ RangeKeyArgCheckPairs }}, options... GetOption) (subjects []*{{ .StructName }}, err error) {
 	for {{ RangeKeyForTerms }} {
-		subject, err := repo.Get(ctx, {{ if ne .RangeKeyFieldName "" }}key, value{{ else }}{{ .HashKeyFieldTagName }}{{ end }})
+		subject, err := repo.Get(ctx, {{ if ne .RangeKeyFieldName "" }}key, value{{ else }}{{ .HashKeyFieldTagName }}{{ end }}, options...)
 		if err != nil {
 			return nil, xerrors.Errorf("error in Get method: %w", err)
 		}
@@ -449,10 +530,10 @@ func (repo *{{ .RepositoryStructName }}) UpdateMulti(ctx context.Context, subjec
 }
 
 // DeleteMulti 処理中の {{ .StructName }} の一括削除処理一切の責任を持ち、これを行う
-func (repo *{{ .RepositoryStructName }}) DeleteMulti(ctx context.Context, subjects []*{{ .StructName }}) error {
+func (repo *{{ .RepositoryStructName }}) DeleteMulti(ctx context.Context, subjects []*{{ .StructName }}, options... DeleteOption) error {
 	tx := repo.db.WriteTx()
 	for _, subject := range subjects {
-		err := repo.DeleteWithTx(ctx, tx, subject)
+		err := repo.DeleteWithTx(ctx, tx, subject, options...)
 		if err != nil {
 			return xerrors.Errorf("deleteMulti.DeleteWithTx error: %w", err)
 		}
@@ -461,10 +542,10 @@ func (repo *{{ .RepositoryStructName }}) DeleteMulti(ctx context.Context, subjec
 }
 
 // DeleteMultiBy{{ PluralForm FuncNameByValue }} 処理中の {{ .StructName }} の{{ .HashKeyFieldName }}群を元に一括削除処理一切の責任を持ち、これを行う
-func (repo *{{ .RepositoryStructName }}) DeleteMultiBy{{ PluralForm FuncNameByValue }}(ctx context.Context, {{ RangeKeyArgCheckPairs }}) error {
+func (repo *{{ .RepositoryStructName }}) DeleteMultiBy{{ PluralForm FuncNameByValue }}(ctx context.Context, {{ RangeKeyArgCheckPairs }}, options... DeleteOption) error {
 	tx := repo.db.WriteTx()
 	for {{ RangeKeyForTerms }} {
-		err := repo.DeleteBy{{ FuncNameByValue }}WithTx(ctx , tx, {{ if ne .RangeKeyFieldName "" }}key, value{{ else }}{{ .HashKeyFieldTagName }}{{ end }})
+		err := repo.DeleteBy{{ FuncNameByValue }}WithTx(ctx , tx, {{ if ne .RangeKeyFieldName "" }}key, value{{ else }}{{ .HashKeyFieldTagName }}{{ end }}, options...)
 		if err != nil {
 			return xerrors.Errorf("DeleteMultiBy{{ PluralForm FuncNameByValue }}.DeleteBy{{ FuncNameByValue }}WithTx error: %w", err)
 		}
