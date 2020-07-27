@@ -125,13 +125,14 @@ func (repo *{{ .RepositoryStructName }}) Scan() *dynamo.Scan {
 func (repo *{{ .RepositoryStructName }}) Get(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options... GetOption) (*{{ .StructName }}, error) {
 	subject := new({{ .StructName }})
 
-	q := repo.table.Get("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", dynamo.Equal, {{ .RangeKeyValueName }}){{ end }}
+	query := repo.table.Get("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", dynamo.Equal, {{ .RangeKeyValueName }}){{ end }}
 {{- if .MetaFields }}
 	if len(options) == 0 || !options[0].IncludeSoftDeleted {
-		q.Filter("attribute_not_exists(DeletedAt) or DeletedAt = null")
+		filterQuery := "attribute_not_exists(DeletedAt) or DeletedAt = ?"
+		query.Filter(filterQuery, nil)
 	}
 {{ end }}
-	if err := q.OneWithContext(ctx, &subject); err != nil {
+	if err := query.OneWithContext(ctx, &subject); err != nil {
 		return nil, xerrors.Errorf("error in Get method: %w", err)
 	}
 	return subject, nil
@@ -144,7 +145,8 @@ func (repo *{{ .RepositoryStructName }}) GetWithTx(tx *dynamo.GetTx, {{ .HashKey
 	query := repo.table.Get("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", dynamo.Equal, {{ .RangeKeyValueName }}){{ end }}
 {{- if .MetaFields }}
 	if len(options) == 0 || !options[0].IncludeSoftDeleted {
-		query.Filter("attribute_not_exists(DeletedAt) or DeletedAt = null")
+		filterQuery := "attribute_not_exists(DeletedAt) or DeletedAt = ?"
+		query.Filter(filterQuery, nil)
 	}
 {{ end }}
 	tx.GetOne(query, &subject)
