@@ -126,9 +126,15 @@ func (repo *{{ .RepositoryStructName }}) Get(ctx context.Context, {{ .HashKeyVal
 	subject := new({{ .StructName }})
 
 	q := repo.table.Get("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", dynamo.Equal, {{ .RangeKeyValueName }}){{ end }}
+	query := repo.table.Get("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", dynamo.Equal, {{ .RangeKeyValueName }}){{ end }}
+	if err := query.OneWithContext(ctx, &subject); err != nil {
+		return nil, xerrors.Errorf("error in Get method: %w", err)
+	}
 {{- if .MetaFields }}
 	if len(options) == 0 || !options[0].IncludeSoftDeleted {
-		q.Filter("attribute_not_exists(DeletedAt) or DeletedAt = null")
+		if subject.DeletedAt != nil {
+			return nil, dynamo.ErrNotFound
+		}
 	}
 {{ end }}
 	if err := q.OneWithContext(ctx, &subject); err != nil {
@@ -142,15 +148,17 @@ func (repo *{{ .RepositoryStructName }}) GetWithTx(tx *dynamo.GetTx, {{ .HashKey
 	subject := new({{ .StructName }})
 
 	query := repo.table.Get("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", dynamo.Equal, {{ .RangeKeyValueName }}){{ end }}
-{{- if .MetaFields }}
-	if len(options) == 0 || !options[0].IncludeSoftDeleted {
-		query.Filter("attribute_not_exists(DeletedAt) or DeletedAt = null")
-	}
-{{ end }}
 	tx.GetOne(query, &subject)
 	if err := tx.Run(); err != nil {
 		return nil, xerrors.Errorf("error in Run method: %w", err)
 	}
+{{- if .MetaFields }}
+	if len(options) == 0 || !options[0].IncludeSoftDeleted {
+		if subject.DeletedAt != nil {
+			return nil, dynamo.ErrNotFound
+		}
+	}
+{{ end }}
 	return subject, nil
 }
 
@@ -332,12 +340,7 @@ func (repo *{{ .RepositoryStructName }}) forceUpdateQuery(ctx context.Context, s
 			continue
 		}
 	}
-{{- if .MetaFields }}
 
-	if subject.DeletedAt != nil {
-		return nil, xerrors.Errorf("Updating 'DeletedAt' in Update is prohibited.: %+v", subject)
-	}
-{{ end }}
 	return repo.table.Update(repo.hashPair(subject)){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", subject.{{ .RangeKeyFieldName }}){{ end }}.
 {{- range $i, $fi := .FieldInfos }}
 {{- if and ( ne $fi.Field $created ) ( ne $fi.Field $updated )}}

@@ -1,5 +1,3 @@
-//+build internal
-
 package tests
 
 import (
@@ -94,6 +92,7 @@ func initDynamoClient(t *testing.T) *dynamo.DB {
 
 	createTable(t, "Name", model.NameSchema)
 	createTable(t, "PrefixTask", model.TaskSchema)
+	createTable(t, "PrefixLock", model.LockSchema)
 
 	return client
 }
@@ -492,4 +491,47 @@ func TestDynamoDB(t *testing.T) {
 	if _, err := taskRepo.Get(ctx, id); !xerrors.Is(err, dynamo.ErrNotFound) {
 		t.Fatalf("Get for deleted item should return ErrNoSuchEntity: %+v", err)
 	}
+}
+
+func TestDynamoDBWithMeta(t *testing.T) {
+	client := initDynamoClient(t)
+
+	lockRepo := model.NewLockRepository(client)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	t.Run("get_softDeletedItem", func(t *testing.T) {
+		name := "test_name"
+		l := &model.Lock{
+			ID:   9,
+			Name: name,
+			Nest1Type: model.Nest1Type{
+				Nest2Type: model.Nest2Type{
+					Meta: model.Meta{},
+				},
+			},
+		}
+		err := lockRepo.Insert(ctx, l)
+		if err != nil {
+			t.Fatalf("failed to put item: %+v", err)
+		}
+
+		err = lockRepo.Delete(ctx, l, model.DeleteOption{Mode: model.DeleteModeSoft})
+		if err != nil {
+			t.Fatalf("failed to soft delete item: %+v", err)
+		}
+
+		di, err := lockRepo.Get(ctx, l.ID, model.GetOption{IncludeSoftDeleted: true})
+		if err != nil {
+			t.Fatalf("failed to get soft deleted item: %+v", err)
+		}
+
+		if di.DeletedAt != nil {
+			t.Fatalf("must be deleted item DeletedAt != nil (%+v)", di.DeletedAt)
+		}
+		if l.Name != name {
+			t.Fatalf("must be item name == %s", name)
+		}
+	})
 }
