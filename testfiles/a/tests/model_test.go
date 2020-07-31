@@ -534,4 +534,35 @@ func TestDynamoDBWithMeta(t *testing.T) {
 			t.Fatalf("must be item name == %s", name)
 		}
 	})
+
+	t.Run("get_hardDeletedItem", func(t *testing.T) {
+		name := "test_name"
+		l := &model.Lock{
+			ID:   9,
+			Name: name,
+			Nest1Type: model.Nest1Type{
+				Nest2Type: model.Nest2Type{
+					Meta: model.Meta{},
+				},
+			},
+		}
+		err := lockRepo.Insert(ctx, l)
+		if err != nil {
+			t.Fatalf("failed to put item: %+v", err)
+		}
+
+		err = lockRepo.Delete(ctx, l, model.DeleteOption{Mode: model.DeleteModeHard})
+		if err != nil {
+			t.Fatalf("failed to soft delete item: %+v", err)
+		}
+
+		di, err := lockRepo.Get(ctx, l.ID, model.GetOption{IncludeSoftDeleted: true})
+		if err == nil {
+			t.Fatalf("Item was successfully acquired: %+v", di)
+		}
+
+		if !xerrors.Is(err, dynamo.ErrNotFound) {
+			t.Fatalf("Failed to acquire item: %+v", err)
+		}
+	})
 }
