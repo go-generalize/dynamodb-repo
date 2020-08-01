@@ -96,10 +96,10 @@ func (repo *{{ .RepositoryStructName }}) setMeta(subject *{{ .StructName }}, isI
 	now := time.Now()
 
 	if isInsert {
-		subject.CreatedAt = now
+		subject.{{ GetMetaKeyWithPath .MetaFields "CreatedAt" }} = now
 	}
-	subject.UpdatedAt = now
-	subject.Version += 1
+	subject.{{ GetMetaKeyWithPath .MetaFields "UpdatedAt" }} = now
+	subject.{{ GetMetaKeyWithPath .MetaFields "Version" }} += 1
 }
 {{ end }}
 
@@ -125,16 +125,17 @@ func (repo *{{ .RepositoryStructName }}) Scan() *dynamo.Scan {
 func (repo *{{ .RepositoryStructName }}) Get(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options... GetOption) (*{{ .StructName }}, error) {
 	subject := new({{ .StructName }})
 
-	query := repo.table.Get("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", dynamo.Equal, {{ .RangeKeyValueName }}){{ end }}
-{{- if .MetaFields }}
-	if len(options) == 0 || !options[0].IncludeSoftDeleted {
-		filterQuery := "attribute_not_exists(DeletedAt) or DeletedAt = ?"
-		query.Filter(filterQuery, nil)
-	}
-{{ end }}
-	if err := query.OneWithContext(ctx, &subject); err != nil {
+	q := repo.table.Get("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", dynamo.Equal, {{ .RangeKeyValueName }}){{ end }}
+	if err := q.OneWithContext(ctx, &subject); err != nil {
 		return nil, xerrors.Errorf("error in Get method: %w", err)
 	}
+{{- if .MetaFields }}
+	if len(options) == 0 || !options[0].IncludeSoftDeleted {
+		if subject.{{ GetMetaKeyWithPath .MetaFields "DeletedAt" }} != nil {
+			return nil, dynamo.ErrNotFound
+		}
+	}
+{{ end }}
 	return subject, nil
 }
 
@@ -143,16 +144,17 @@ func (repo *{{ .RepositoryStructName }}) GetWithTx(tx *dynamo.GetTx, {{ .HashKey
 	subject := new({{ .StructName }})
 
 	query := repo.table.Get("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", dynamo.Equal, {{ .RangeKeyValueName }}){{ end }}
-{{- if .MetaFields }}
-	if len(options) == 0 || !options[0].IncludeSoftDeleted {
-		filterQuery := "attribute_not_exists(DeletedAt) or DeletedAt = ?"
-		query.Filter(filterQuery, nil)
-	}
-{{ end }}
 	tx.GetOne(query, &subject)
 	if err := tx.Run(); err != nil {
 		return nil, xerrors.Errorf("error in Run method: %w", err)
 	}
+{{- if .MetaFields }}
+	if len(options) == 0 || !options[0].IncludeSoftDeleted {
+		if subject.{{ GetMetaKeyWithPath .MetaFields "DeletedAt" }} != nil {
+			return nil, dynamo.ErrNotFound
+		}
+	}
+{{ end }}
 	return subject, nil
 }
 
@@ -181,9 +183,10 @@ func (repo *{{ .RepositoryStructName }}) insertQuery(subject *{{ .StructName }})
 }
 func (repo *{{ .RepositoryStructName }}) beforeInsert(ctx context.Context, subject *{{ .StructName }}) error {
 {{- if .MetaFields }}
-	if subject.Version != 0 {
-		return xerrors.Errorf("insert data must be Version == 0: %+v", subject)
+	if subject.{{ GetMetaKeyWithPath .MetaFields "Version" }} != 0 {
+		return xerrors.Errorf("insert data must be {{ GetMetaKeyWithPath .MetaFields "Version" }} == 0: %+v", subject)
 	}
+	repo.setMeta(subject, true)
 
 {{- end }}
 	for _, m := range repo.middleware {
@@ -240,6 +243,17 @@ func (repo *{{ .RepositoryStructName }}) InsertWithTx(ctx context.Context, tx *d
 }
 
 func (repo *{{ .RepositoryStructName }}) updateQuery(ctx context.Context, old, subject *{{ .StructName }}) (*dynamo.Update, error) {
+{{- if .MetaFields }}
+	if subject.{{ GetMetaKeyWithPath .MetaFields "DeletedAt" }} != nil {
+	return nil, xerrors.Errorf("Updating 'DeletedAt' in Update is prohibited.: %+v", subject)
+	}
+
+	if old.{{ GetMetaKeyWithPath .MetaFields "Version" }} > subject.{{ GetMetaKeyWithPath .MetaFields "Version" }} {
+	return nil, xerrors.Errorf("The data in the database is newer: (db {{ GetMetaKeyWithPath .MetaFields "Version" }}: %d, target {{ GetMetaKeyWithPath .MetaFields "Version" }}: %d) %+v",
+	old.{{ GetMetaKeyWithPath .MetaFields "Version" }}, subject.{{ GetMetaKeyWithPath .MetaFields "Version" }}, subject)
+	}
+	repo.setMeta(subject, false)
+{{ end }}
 	updated := map[string]interface{}{}
 	{{- $created := .CreateTimeName }}
 	{{- $updated := .UpdateTimeName }}
@@ -254,17 +268,6 @@ func (repo *{{ .RepositoryStructName }}) updateQuery(ctx context.Context, old, s
 	if len(updated) == 0 {
 		return nil, nil
 	}
-{{- if .MetaFields }}
-
-	if subject.DeletedAt != nil {
-		return nil, xerrors.Errorf("Updating 'DeletedAt' in Update is prohibited.: %+v", subject)
-	}
-
-	if old.Version > subject.Version {
-		return nil, xerrors.Errorf("The data in the database is newer: (db version: %d, target version: %d) %+v",
-			old.Version, subject.Version, subject)
-	}
-{{ end }}
 	query := repo.table.Update(repo.hashPair(subject)){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", subject.{{ .RangeKeyFieldName }}){{ end }}
 	for path, v := range updated {
 		query.Set(path, v)
@@ -334,12 +337,7 @@ func (repo *{{ .RepositoryStructName }}) forceUpdateQuery(ctx context.Context, s
 			continue
 		}
 	}
-{{- if .MetaFields }}
 
-	if subject.DeletedAt != nil {
-		return nil, xerrors.Errorf("Updating 'DeletedAt' in Update is prohibited.: %+v", subject)
-	}
-{{ end }}
 	return repo.table.Update(repo.hashPair(subject)){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", subject.{{ .RangeKeyFieldName }}){{ end }}.
 {{- range $i, $fi := .FieldInfos }}
 {{- if and ( ne $fi.Field $created ) ( ne $fi.Field $updated )}}
@@ -396,7 +394,7 @@ func (repo *{{ .RepositoryStructName }}) Delete(ctx context.Context, subject *{{
 {{- if .MetaFields }}
 
 	if len(options) > 0 && options[0].Mode == DeleteModeSoft {
-		subject.DeletedAt = repo.getNowPointer()
+		subject.{{ GetMetaKeyWithPath .MetaFields "DeletedAt" }} = repo.getNowPointer()
 		q, err := repo.forceUpdateQuery(ctx, subject)
 		if err != nil {
 			return xerrors.Errorf("Delete.forceUpdateQuery Error: %w", err)
@@ -426,7 +424,7 @@ func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}(ctx conte
 			return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}.Get error: %w", err)
 		}
 
-		subject.DeletedAt = repo.getNowPointer()
+		subject.{{ GetMetaKeyWithPath .MetaFields "DeletedAt" }} = repo.getNowPointer()
 		q, err := repo.forceUpdateQuery(ctx, subject)
 		if err != nil {
 			return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}.forceUpdateQuery Error: %w", err)
@@ -451,7 +449,7 @@ func (repo *{{ .RepositoryStructName }}) DeleteWithTx(ctx context.Context, tx *d
 {{- if .MetaFields }}
 
 	if len(options) > 0 && options[0].Mode == DeleteModeSoft {
-		subject.DeletedAt = repo.getNowPointer()
+		subject.{{ GetMetaKeyWithPath .MetaFields "DeletedAt" }} = repo.getNowPointer()
 		q, err := repo.forceUpdateQuery(ctx, subject)
 		if err != nil {
 			return xerrors.Errorf("DeleteWithTx.forceUpdateQuery Error: %w", err)
@@ -483,7 +481,7 @@ func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}WithTx(ctx
 			return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}WithTx.Get error: %w", err)
 		}
 
-		subject.DeletedAt = repo.getNowPointer()
+		subject.{{ GetMetaKeyWithPath .MetaFields "DeletedAt" }} = repo.getNowPointer()
 		q, err := repo.forceUpdateQuery(ctx, subject)
 		if err != nil {
 			return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}WithTx.forceUpdateQuery Error: %w", err)

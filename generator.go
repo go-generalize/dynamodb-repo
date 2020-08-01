@@ -179,5 +179,13 @@ func (g *generator) setFuncMap() template.FuncMap {
 			_, ok := fields[key]
 			return ok
 		},
+		"GetMetaKeyWithPath": func(fields map[string]Field, key string) string {
+			p := fields[key].ParentPath
+			if p == "" {
+				return key
+			}
+
+			return fmt.Sprintf("%s.%s", p, key)
+		},
 	}
 }

@@ -191,3 +191,44 @@ const TaskSchema = `
 	}
 }
 `
+
+// language=json
+const LockSchema = `
+{
+	"AttributeDefinitions": [
+		{
+			"AttributeName": "id",
+			"AttributeType": "N"
+		}
+	],
+	"TableName": "PrefixLock",
+	"KeySchema": [
+		{
+			"AttributeName": "id",
+			"KeyType": "HASH"
+		}
+	],
+	"GlobalSecondaryIndexes": [
+		{
+			"IndexName": "id-index",
+			"ProvisionedThroughput": {
+				"WriteCapacityUnits": 9,
+				"ReadCapacityUnits": 9
+			},
+			"KeySchema": [
+				{
+					"KeyType": "HASH",
+					"AttributeName": "id"
+				}
+			],
+			"Projection": {
+				"ProjectionType": "ALL"
+			}
+		}
+	],
+	"ProvisionedThroughput": {
+		"ReadCapacityUnits": 9,
+		"WriteCapacityUnits": 9
+	}
+}
+`
