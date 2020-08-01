@@ -243,6 +243,17 @@ func (repo *{{ .RepositoryStructName }}) InsertWithTx(ctx context.Context, tx *d
 }
 
 func (repo *{{ .RepositoryStructName }}) updateQuery(ctx context.Context, old, subject *{{ .StructName }}) (*dynamo.Update, error) {
+{{- if .MetaFields }}
+	if subject.{{ GetMetaKeyWithPath .MetaFields "DeletedAt" }} != nil {
+	return nil, xerrors.Errorf("Updating 'DeletedAt' in Update is prohibited.: %+v", subject)
+	}
+
+	if old.{{ GetMetaKeyWithPath .MetaFields "Version" }} > subject.{{ GetMetaKeyWithPath .MetaFields "Version" }} {
+	return nil, xerrors.Errorf("The data in the database is newer: (db {{ GetMetaKeyWithPath .MetaFields "Version" }}: %d, target {{ GetMetaKeyWithPath .MetaFields "Version" }}: %d) %+v",
+	old.{{ GetMetaKeyWithPath .MetaFields "Version" }}, subject.{{ GetMetaKeyWithPath .MetaFields "Version" }}, subject)
+	}
+	repo.setMeta(subject, false)
+{{ end }}
 	updated := map[string]interface{}{}
 	{{- $created := .CreateTimeName }}
 	{{- $updated := .UpdateTimeName }}
@@ -257,18 +268,6 @@ func (repo *{{ .RepositoryStructName }}) updateQuery(ctx context.Context, old, s
 	if len(updated) == 0 {
 		return nil, nil
 	}
-{{- if .MetaFields }}
-
-	if subject.{{ GetMetaKeyWithPath .MetaFields "DeletedAt" }} != nil {
-		return nil, xerrors.Errorf("Updating 'DeletedAt' in Update is prohibited.: %+v", subject)
-	}
-
-	if old.{{ GetMetaKeyWithPath .MetaFields "Version" }} > subject.{{ GetMetaKeyWithPath .MetaFields "Version" }} {
-		return nil, xerrors.Errorf("The data in the database is newer: (db {{ GetMetaKeyWithPath .MetaFields "Version" }}: %d, target {{ GetMetaKeyWithPath .MetaFields "Version" }}: %d) %+v",
-			old.{{ GetMetaKeyWithPath .MetaFields "Version" }}, subject.{{ GetMetaKeyWithPath .MetaFields "Version" }}, subject)
-	}
-	repo.setMeta(subject, false)
-{{ end }}
 	query := repo.table.Update(repo.hashPair(subject)){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", subject.{{ .RangeKeyFieldName }}){{ end }}
 	for path, v := range updated {
 		query.Set(path, v)

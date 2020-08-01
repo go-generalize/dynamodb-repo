@@ -563,4 +563,39 @@ func TestDynamoDBWithMeta(t *testing.T) {
 			t.Fatalf("Failed to acquire item: %+v", err)
 		}
 	})
+
+	t.Run("updatedAt_test", func(t *testing.T) {
+		name := "test_name"
+		l := &model.Lock{
+			ID:   9,
+			Name: name,
+		}
+		err := lockRepo.Insert(ctx, l)
+		if err != nil {
+			t.Fatalf("failed to put item: %+v", err)
+		}
+
+		updatedName := "test_name_updated"
+		l.Name = updatedName
+		time.Sleep(5 * time.Second)
+
+		err = lockRepo.Update(ctx, l)
+		if err != nil {
+			t.Fatalf("failed to update item: %+v", err)
+		}
+
+		di, err := lockRepo.Get(ctx, l.ID, model.GetOption{IncludeSoftDeleted: true})
+		if err != nil {
+			t.Fatalf("failed to get updated item: %+v", err)
+		}
+
+		if di.Name != updatedName {
+			t.Fatalf("must be updated item Name != %s (%+v)", updatedName, di)
+		}
+
+		if di.Meta.Nest1.MetaPayload.CreatedAt.Unix() == di.Meta.Nest1.MetaPayload.UpdatedAt.Unix() {
+			t.Fatalf("must be updated item CreatedAt(%+v) != UpdatedAt(%+v)",
+				di.Meta.Nest1.MetaPayload.CreatedAt, di.Meta.Nest1.MetaPayload.UpdatedAt)
+		}
+	})
 }
