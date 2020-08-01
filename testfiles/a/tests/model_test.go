@@ -500,10 +500,10 @@ func TestDynamoDBWithMeta(t *testing.T) {
 
 	lockRepo := model.NewLockRepository(client)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
 	t.Run("get_softDeletedItem", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
 		name := "test_name"
 		l := &model.Lock{
 			ID:   9,
@@ -541,9 +541,12 @@ func TestDynamoDBWithMeta(t *testing.T) {
 	})
 
 	t.Run("get_hardDeletedItem", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
 		name := "test_name"
 		l := &model.Lock{
-			ID:   9,
+			ID:   19,
 			Name: name,
 		}
 		err := lockRepo.Insert(ctx, l)
@@ -567,9 +570,12 @@ func TestDynamoDBWithMeta(t *testing.T) {
 	})
 
 	t.Run("updatedAt_test", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
 		name := "test_name"
 		l := &model.Lock{
-			ID:   9,
+			ID:   29,
 			Name: name,
 		}
 		err := lockRepo.Insert(ctx, l)

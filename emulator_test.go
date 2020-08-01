@@ -39,7 +39,7 @@ func TestGenerator(t *testing.T) {
 			tr.Fatalf("failed to generate for testfiles/a: %+v", err)
 		}
 
-		if err := run("Lock", "", false); err != nil {
+		if err := run("Lock", "Prefix", false); err != nil {
 			tr.Fatalf("failed to generate for testfiles/a: %+v", err)
 		}
 
