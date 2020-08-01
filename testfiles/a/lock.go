@@ -18,13 +18,13 @@ type Meta struct {
 
 // Lock Metaテスト用
 type Nest2Type struct {
-	Meta
+	MetaPayload Meta
 }
 type Nest1Type struct {
-	Nest2Type
+	Nest1 Nest2Type
 }
 type Lock struct {
 	ID   int64  `dynamo:"id,hash"`
 	Name string `dynamo:"name"`
-	Nest1Type
+	Meta Nest1Type
 }

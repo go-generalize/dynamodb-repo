@@ -506,11 +506,6 @@ func TestDynamoDBWithMeta(t *testing.T) {
 		l := &model.Lock{
 			ID:   9,
 			Name: name,
-			Nest1Type: model.Nest1Type{
-				Nest2Type: model.Nest2Type{
-					Meta: model.Meta{},
-				},
-			},
 		}
 		err := lockRepo.Insert(ctx, l)
 		if err != nil {
@@ -527,11 +522,19 @@ func TestDynamoDBWithMeta(t *testing.T) {
 			t.Fatalf("failed to get soft deleted item: %+v", err)
 		}
 
-		if di.DeletedAt != nil {
-			t.Fatalf("must be deleted item DeletedAt != nil (%+v)", di.DeletedAt)
+		if di.Meta.Nest1.MetaPayload.DeletedAt == nil {
+			t.Fatalf("must be deleted item DeletedAt != nil (%+v)", di.Meta.Nest1.MetaPayload.DeletedAt)
 		}
 		if l.Name != name {
 			t.Fatalf("must be item name == %s", name)
+		}
+
+		di, err = lockRepo.Get(ctx, l.ID, model.GetOption{IncludeSoftDeleted: false})
+		if err == nil {
+			t.Fatalf("Item was successfully acquired: %+v", di)
+		}
+		if !xerrors.Is(err, dynamo.ErrNotFound) {
+			t.Fatalf("Failed to acquire item: %+v", err)
 		}
 	})
 
@@ -540,11 +543,6 @@ func TestDynamoDBWithMeta(t *testing.T) {
 		l := &model.Lock{
 			ID:   9,
 			Name: name,
-			Nest1Type: model.Nest1Type{
-				Nest2Type: model.Nest2Type{
-					Meta: model.Meta{},
-				},
-			},
 		}
 		err := lockRepo.Insert(ctx, l)
 		if err != nil {

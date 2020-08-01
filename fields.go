@@ -93,9 +93,9 @@ func listAllField(field *ast.FieldList, parentName string, isEmbed bool) []Field
 			if !ok {
 				continue
 			}
-			parentNameArg := d.Name.Name
+			parentNameArg := name
 			if len(parentName) > 0 {
-				parentNameArg = fmt.Sprintf("%s.%s", parentName, parentNameArg)
+				parentNameArg = fmt.Sprintf("%s.%s", parentName, name)
 			}
 
 			fs := listAllField(s.Fields, parentNameArg, isCurrentEmbed)
