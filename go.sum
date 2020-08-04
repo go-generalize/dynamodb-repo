@@ -7,6 +7,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/fatih/structtag v1.2.0 h1:/OdNE99OxoI/PqaW/SuSK9uxxT3f/tcSZgon/ssNSx4=
 github.com/fatih/structtag v1.2.0/go.mod h1:mBJUNpUnHmRKrKlQQlmCrh5PuhftFbNv8Ys4/aAZl94=
+github.com/go-generalize/meta-field v0.0.0-20200804101607-818dd72f5d2c h1:PT5qRPue2hLX3Lzi2gGbz2veq6FgY9vxVzorFjGeiUU=
+github.com/go-generalize/meta-field v0.0.0-20200804101607-818dd72f5d2c/go.mod h1:VkoFVnjtJMM1eZZl4j28G9uolZ5P7HtjpfQ4oqh1UEg=
 github.com/go-sql-driver/mysql v1.5.0/go.mod h1:DCzpHaOWr8IXmIStZouvnhqoel9Qv2LBy8hT2VhHyBg=
 github.com/go-utils/plural v0.0.1 h1:GdqHN1+s1dm3HDyejIjUUOS+WIZcyNkB2SrajDS0Iy4=
 github.com/go-utils/plural v0.0.1/go.mod h1:YZ/ondycPVz8gA0vFfGP5J3HghFtfyJiiS7CZ6Iir9Q=

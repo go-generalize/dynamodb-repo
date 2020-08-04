@@ -8,6 +8,8 @@ import (
 	"strings"
 	"text/template"
 
+	field "github.com/go-generalize/meta-field"
+
 	_ "github.com/go-generalize/dynamodb-repo/statik"
 	"github.com/go-utils/plural"
 	"github.com/iancoleman/strcase"
@@ -73,7 +75,7 @@ type generator struct {
 	UpdateTimeType      string
 	EnableDDA           bool
 
-	MetaFields map[string]Field
+	MetaFields map[string]*field.Field
 }
 
 func (g *generator) setting() {
@@ -175,11 +177,11 @@ func (g *generator) setFuncMap() template.FuncMap {
 		"PluralForm": func(word string) string {
 			return plural.Convert(word)
 		},
-		"HasKey": func(fields map[string]Field, key string) bool {
+		"HasKey": func(fields map[string]*field.Field, key string) bool {
 			_, ok := fields[key]
 			return ok
 		},
-		"GetMetaKeyWithPath": func(fields map[string]Field, key string) string {
+		"GetMetaKeyWithPath": func(fields map[string]*field.Field, key string) string {
 			p := fields[key].ParentPath
 			if p == "" {
 				return key

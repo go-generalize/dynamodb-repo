@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/fatih/structtag"
+	field "github.com/go-generalize/meta-field"
 	"golang.org/x/xerrors"
 )
 
@@ -105,15 +106,15 @@ func traverse(pkg *ast.Package, fs *token.FileSet, structName, prefix string) er
 }
 
 func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) error {
-	var metaList map[string]Field
+	var metaList map[string]*field.Field
 	if !*disableMeta {
 		var err error
-		fList := listAllField(structType.Fields, "", false)
-		metas, err := searchMetaProperties(fList)
+		fList := field.ListAllField(structType.Fields, "", false)
+		metas, _, err := field.SearchMetaProperties(fList)
 		if err != nil {
 			return err
 		}
-		metaList = make(map[string]Field)
+		metaList = make(map[string]*field.Field)
 		for _, m := range metas {
 			metaList[m.Name] = m
 		}
