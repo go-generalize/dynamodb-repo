@@ -17,6 +17,7 @@ var (
 	UpdateTime = "UpdateTime"
 )
 
+// content of the template file as string
 func getFileContents(name string) string {
 	fp, err := statikFS.Open("/" + name + ".go.tmpl")
 	if err != nil {
@@ -30,6 +31,7 @@ func getFileContents(name string) string {
 	return string(contents)
 }
 
+// convert input AST node to go-style declaration string
 func getTypeName(typ ast.Expr) string {
 	switch v := typ.(type) {
 	case *ast.SelectorExpr:
@@ -49,6 +51,7 @@ func getTypeName(typ ast.Expr) string {
 	}
 }
 
+// check if input name is valid as identifier
 func dynamoTagCheck(pos string, label string) error {
 	if label == "" {
 		return nil

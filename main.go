@@ -22,6 +22,7 @@ var (
 	isShowVersion = flag.Bool("v", false, "print version")
 )
 
+// Entry Point
 func main() {
 	flag.Parse()
 
@@ -42,6 +43,7 @@ func main() {
 	}
 }
 
+// Entry point of generating process
 func run(structName, prefix string, isDisableMeta bool) error {
 	disableMeta = &isDisableMeta
 	fs := token.NewFileSet()
@@ -51,6 +53,7 @@ func run(structName, prefix string, isDisableMeta bool) error {
 		panic(err)
 	}
 
+	// traverse for each package whose name doesn't have suffix "_test"
 	for name, v := range pkgs {
 		if strings.HasSuffix(name, "_test") {
 			continue
@@ -62,12 +65,14 @@ func run(structName, prefix string, isDisableMeta bool) error {
 	return nil
 }
 
+// main routine for generating process
 func traverse(pkg *ast.Package, fs *token.FileSet, structName, prefix string) error {
 	gen := &generator{PackageName: pkg.Name}
 	for name, file := range pkg.Files {
 		gen.FileName = strings.TrimSuffix(filepath.Base(name), ".go")
 		gen.GeneratedFileName = gen.FileName + "_gen"
 
+		// process for each type declaration
 		for _, decl := range file.Decls {
 			genDecl, ok := decl.(*ast.GenDecl)
 			if !ok {
@@ -83,6 +88,7 @@ func traverse(pkg *ast.Package, fs *token.FileSet, structName, prefix string) er
 				if !ok {
 					continue
 				}
+
 				name := typeSpec.Name.Name
 
 				if name != structName {
@@ -105,6 +111,7 @@ func traverse(pkg *ast.Package, fs *token.FileSet, structName, prefix string) er
 	return xerrors.Errorf("no such struct: %s", structName)
 }
 
+// process for types whose name is `structName`
 func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) error {
 	var metaList map[string]*field.Field
 	if !*disableMeta {
@@ -189,6 +196,7 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 				gen.FieldInfos = append(gen.FieldInfos, fieldInfo)
 				continue
 			}
+			// turn `dynamo:"id,hash"` into string{"id", "hash"} as `sp`
 			sp := strings.Split(dynamoTag.Value(), ",")
 			fieldInfo.Tags = &FieldParsedTags{
 				Raw: sp,
@@ -254,6 +262,7 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 		gen.UniqueFields = nil
 	}
 
+	// precondition: `gen` (is a Generate) is ready to generate files
 	if gen.EnableCreateTime || gen.EnableUpdateTime {
 		if !(gen.EnableCreateTime && gen.EnableUpdateTime) {
 			return xerrors.New("requires both CreatedAt and UpdatedAt")
@@ -319,6 +328,7 @@ func parseTags(tags []string) *FieldParsedTags {
 	return p
 }
 
+// handles field metadata such as `dynamo:"id,hash"`
 func keyFieldHandle(gen *generator, label string, keyKind KeyKind, name, typeName, pos string) error {
 	switch keyKind {
 	case KeyKindHash:

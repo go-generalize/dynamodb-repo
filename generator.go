@@ -107,6 +107,7 @@ func (g *generator) setting() {
 	g.RepositoryStructName = strcase.ToLowerCamel(g.RepositoryInterfaceName)
 }
 
+// generates "(.*)_gen.go"
 func (g *generator) generate(writer io.Writer) {
 	g.setting()
 	funcMap := g.setFuncMap()
@@ -119,6 +120,7 @@ func (g *generator) generate(writer io.Writer) {
 	}
 }
 
+// generates "constant.go"
 func (g *generator) generateConstant(writer io.Writer) {
 	contents := getFileContents("constant")
 
@@ -129,6 +131,7 @@ func (g *generator) generateConstant(writer io.Writer) {
 	}
 }
 
+// generates "misc.go"
 func (g *generator) generateMisc(writer io.Writer) {
 	contents := getFileContents("misc")
 
@@ -139,6 +142,7 @@ func (g *generator) generateMisc(writer io.Writer) {
 	}
 }
 
+// generates
 func (g *generator) setFuncMap() template.FuncMap {
 	return template.FuncMap{
 		"Parse": func(fieldType string) string {
