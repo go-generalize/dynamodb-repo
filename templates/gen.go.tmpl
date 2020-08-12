@@ -1,3 +1,4 @@
+{{- $tableName := .TableName }}
 // THIS FILE IS A GENERATED CODE. DO NOT EDIT
 // generated version: {{ .AppVersion }}
 package {{ .PackageName }}
@@ -66,7 +67,32 @@ type {{ .RepositoryStructName }} struct {
 	table      dynamo.Table
 	middleware []{{ $middlewareName }}
 }
+{{ if .UniqueFields }}
+{{- range $uniqueField := .UniqueFields }}
+type {{ printf "%s%sUnique" $tableName $uniqueField.Name }} struct {
+	{{ $uniqueField.Name }} {{ $uniqueField.Type }} `dynamo:"id,hash"`
+}
+{{ end }}
+// Create{{ .StructName }}DepsTable Create a dependency table for {{ .TableName }}
+func Create{{ .StructName }}DepsTable(db *dynamo.DB) error {
+    structs := map[string]interface{}{
+{{- range $uniqueField := .UniqueFields }}
+        "{{ printf "%s%sUnique" $tableName $uniqueField.Name }}": new({{ printf "%s%s" $tableName $uniqueField.Name }}Unique),
+{{- end }}
+    }
 
+    for name, s := range structs {
+    	createTable := db.CreateTable(name, s)
+
+        err := createTable.Run()
+        if err != nil {
+            return xerrors.Errorf("failed to Create{{ .StructName }}DepsTable by {{ .RepositoryInterfaceName }} err: %w", err)
+        }
+	}
+
+	return nil
+}
+{{ end }}
 // New{{ .RepositoryInterfaceName }} constructor
 func New{{ .RepositoryInterfaceName }}(db *dynamo.DB, middleware... {{ $middlewareName }}) {{ .RepositoryInterfaceName }} {
 	return &{{ .RepositoryStructName }}{
@@ -214,6 +240,17 @@ func (repo *{{ .RepositoryStructName }}) Insert(ctx context.Context, subject *{{
 		return xerrors.New("{{ .HashKeyFieldName }} is required")
 	}
 {{- end }}
+{{ range $uniqueField := .UniqueFields }}
+    var {{ printf "%s%sUniqueSubject" $tableName $uniqueField.Name }} *{{ printf "%s%sUnique" $tableName $uniqueField.Name }} = nil
+    {{ printf "%s%sTable" $tableName $uniqueField.Name }} := repo.db.Table("{{ printf "%s%sUnique" $tableName $uniqueField.Name }}")
+    if err := {{ printf "%s%sTable" $tableName $uniqueField.Name }}.Get("{{ $uniqueField.Name }}", subject.{{ $uniqueField.Name }}).OneWithContext(ctx, &{{ printf "%s%sUniqueSubject" $tableName $uniqueField.Name }});
+        err != nil && !xerrors.Is(err, dynamo.ErrNotFound) {
+        return err
+    }
+    if {{ printf "%s%sUniqueSubject" $tableName $uniqueField.Name }} != nil {
+        return xerrors.New("{{ $uniqueField.Name }} has to be unique, but it already exists.")
+    }
+{{ end }}
 	if err := repo.beforeInsert(ctx, subject); err != nil {
 		return xerrors.Errorf("Insert.beforeInsert error: %w", err)
 	}

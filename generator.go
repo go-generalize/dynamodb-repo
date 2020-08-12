@@ -26,10 +26,25 @@ func init() {
 	}
 }
 
+type KeyKind string
+
+const (
+	KeyKindHash  KeyKind = "hash"
+	KeyKindRange KeyKind = "range"
+)
+
+type FieldParsedTags struct {
+	Name     string
+	KeyKind  KeyKind
+	IsUnique bool
+	Raw      []string
+}
+
 type FieldInfo struct {
 	DynamoTag string
 	Field     string
 	FieldType string
+	Tags      *FieldParsedTags
 }
 
 type ImportInfo struct {
@@ -75,7 +90,8 @@ type generator struct {
 	UpdateTimeType      string
 	EnableDDA           bool
 
-	MetaFields map[string]*field.Field
+	MetaFields   map[string]*field.Field
+	UniqueFields map[string]*field.Field
 }
 
 func (g *generator) setting() {
