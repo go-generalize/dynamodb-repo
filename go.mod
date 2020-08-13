@@ -5,7 +5,7 @@ go 1.12
 require (
 	github.com/aws/aws-sdk-go v1.30.24
 	github.com/fatih/structtag v1.2.0
-	github.com/go-generalize/meta-field v0.0.0-20200805092722-da9ede7a4221
+	github.com/go-utils/meta v0.0.0-20200806045939-90d0bfa8bb9b
 	github.com/go-utils/plural v0.0.1
 	github.com/golang/mock v1.4.4
 	github.com/google/uuid v1.1.1

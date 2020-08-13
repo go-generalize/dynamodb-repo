@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/fatih/structtag"
-	field "github.com/go-generalize/meta-field"
+	field "github.com/go-utils/meta"
 	"golang.org/x/xerrors"
 )
 
