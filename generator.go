@@ -8,7 +8,7 @@ import (
 	"strings"
 	"text/template"
 
-	field "github.com/go-generalize/meta-field"
+	field "github.com/go-utils/meta"
 
 	_ "github.com/go-generalize/dynamodb-repo/statik"
 	"github.com/go-utils/plural"
