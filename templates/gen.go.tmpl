@@ -69,7 +69,7 @@ type {{ .RepositoryStructName }} struct {
 {{ if .UniqueFields }}
 {{- range $uniqueField := .UniqueFields }}
 type {{ $uniqueField.StructName }} struct {
-	{{ $uniqueField.Name }} {{ $uniqueField.Type }} `dynamo:"id,hash"`
+	{{ $uniqueField.Name }} {{ $uniqueField.Type }} `dynamo:"hash"`
 }
 {{ end }}
 // Create{{ .StructName }}DepsTable Create a dependency table for {{ .TableName }}
