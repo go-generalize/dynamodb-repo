@@ -223,14 +223,20 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 		}
 	}
 
-	gen.UniqueFields = make(map[string]*field.Field)
+	gen.UniqueFields = make(map[string]*UniqueField)
 	for _, f := range fieldInfos {
 		if f.Tags == nil || !f.Tags.IsUnique {
 			continue
 		}
-		gen.UniqueFields[f.Field] = &field.Field{
-			Name: f.Field,
-			Type: f.FieldType,
+		varName := fmt.Sprintf("%s%s", gen.TableName, f.Field)
+		gen.UniqueFields[f.Field] = &UniqueField{
+			VarName:     varName,
+			StructName:  fmt.Sprintf("%sUnique", varName),
+			SubjectName: fmt.Sprintf("%sSubject", varName),
+			Field: field.Field{
+				Name: f.Field,
+				Type: f.FieldType,
+			},
 		}
 	}
 	if len(gen.UniqueFields) == 0 {

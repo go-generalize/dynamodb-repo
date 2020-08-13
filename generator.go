@@ -51,6 +51,13 @@ type ImportInfo struct {
 	Name string
 }
 
+type UniqueField struct {
+	VarName     string
+	StructName  string
+	SubjectName string
+	field.Field
+}
+
 type generator struct {
 	AppVersion        string
 	PackageName       string
@@ -91,7 +98,7 @@ type generator struct {
 	EnableDDA           bool
 
 	MetaFields   map[string]*field.Field
-	UniqueFields map[string]*field.Field
+	UniqueFields map[string]*UniqueField
 }
 
 func (g *generator) setting() {

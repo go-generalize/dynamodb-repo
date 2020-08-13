@@ -498,6 +498,7 @@ func TestDynamoDB(t *testing.T) {
 func TestDynamoDBWithMeta(t *testing.T) {
 	client := initDynamoClient(t)
 
+	model.CreateLockDepsTable(client)
 	lockRepo := model.NewLockRepository(client)
 
 	t.Run("get_softDeletedItem", func(t *testing.T) {

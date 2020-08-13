@@ -59,7 +59,6 @@ type {{ $middlewareName }} interface {
 	BeforeInsert(ctx context.Context, subject *{{ .StructName }}) (bool, error)
 	BeforeUpdate(ctx context.Context, subject *{{ .StructName }}) (bool, error)
 	BeforeDelete(ctx context.Context, subject *{{ .StructName }}, options... DeleteOption) (bool, error)
-	BeforeDeleteBy{{ FuncNameByValue }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options... DeleteOption) (bool, error)
 }
 
 type {{ .RepositoryStructName }} struct {
@@ -69,7 +68,7 @@ type {{ .RepositoryStructName }} struct {
 }
 {{ if .UniqueFields }}
 {{- range $uniqueField := .UniqueFields }}
-type {{ printf "%s%sUnique" $tableName $uniqueField.Name }} struct {
+type {{ $uniqueField.StructName }} struct {
 	{{ $uniqueField.Name }} {{ $uniqueField.Type }} `dynamo:"id,hash"`
 }
 {{ end }}
@@ -77,7 +76,7 @@ type {{ printf "%s%sUnique" $tableName $uniqueField.Name }} struct {
 func Create{{ .StructName }}DepsTable(db *dynamo.DB) error {
     structs := map[string]interface{}{
 {{- range $uniqueField := .UniqueFields }}
-        "{{ printf "%s%sUnique" $tableName $uniqueField.Name }}": new({{ printf "%s%s" $tableName $uniqueField.Name }}Unique),
+        "{{ $uniqueField.StructName }}": new({{ $uniqueField.StructName }}),
 {{- end }}
     }
 
@@ -150,13 +149,13 @@ func (repo *{{ .RepositoryStructName }}) Scan() *dynamo.Scan {
 // validateUnique unique check
 func (repo *lockRepository) validateUnique(ctx context.Context, subject *{{ .StructName }}) error {
 {{- range $uniqueField := .UniqueFields }}
-    var {{ printf "%s%sUniqueSubject" $tableName $uniqueField.Name }} *{{ printf "%s%sUnique" $tableName $uniqueField.Name }} = nil
-    {{ printf "%s%sTable" $tableName $uniqueField.Name }} := repo.db.Table("{{ printf "%s%sUnique" $tableName $uniqueField.Name }}")
-    if err := {{ printf "%s%sTable" $tableName $uniqueField.Name }}.Get("{{ $uniqueField.Name }}", subject.{{ $uniqueField.Name }}).OneWithContext(ctx, &{{ printf "%s%sUniqueSubject" $tableName $uniqueField.Name }});
+    var {{ $uniqueField.SubjectName }} *{{ $uniqueField.StructName }} = nil
+    {{ printf "%sTable" $uniqueField.VarName }} := repo.db.Table("{{ $uniqueField.StructName }}")
+    if err := {{ printf "%sTable" $uniqueField.VarName }}.Get("{{ $uniqueField.Name }}", subject.{{ $uniqueField.Name }}).OneWithContext(ctx, &{{ $uniqueField.SubjectName }});
         err != nil && !xerrors.Is(err, dynamo.ErrNotFound) {
         return err
     }
-    if {{ printf "%s%sUniqueSubject" $tableName $uniqueField.Name }} != nil {
+    if {{ $uniqueField.SubjectName }} != nil {
         return xerrors.New("{{ $uniqueField.Name }} has to be unique, but it already exists.")
     }
 {{ end }}
@@ -262,11 +261,11 @@ func (repo *{{ .RepositoryStructName }}) Insert(ctx context.Context, subject *{{
     }
 {{- end }}
 {{- range $uniqueField := .UniqueFields }}
-    {{ printf "%s%sTable" $tableName $uniqueField.Name }} := repo.db.Table("{{ printf "%s%sUnique" $tableName $uniqueField.Name }}")
-    {{ printf "%s%sUniqueSubject" $tableName $uniqueField.Name }} := new({{ printf "%s%sUnique" $tableName $uniqueField.Name }})
-	{{ printf "%s%sUniqueSubject" $tableName $uniqueField.Name }}.{{ $uniqueField.Name }} = subject.{{ $uniqueField.Name }}
-	if err := {{ printf "%s%sTable" $tableName $uniqueField.Name }}.Put({{ printf "%s%sUniqueSubject" $tableName $uniqueField.Name }}).RunWithContext(ctx); err != nil {
-		return xerrors.Errorf("Insert.{{ printf "%s%sTable" $tableName $uniqueField.Name }}.Put error: %w", err)
+    {{ printf "%sTable" $uniqueField.VarName }} := repo.db.Table("{{ $uniqueField.StructName }}")
+    {{ $uniqueField.SubjectName }} := new({{ $uniqueField.StructName }})
+	{{ $uniqueField.SubjectName }}.{{ $uniqueField.Name }} = subject.{{ $uniqueField.Name }}
+	if err := {{ printf "%sTable" $uniqueField.VarName }}.Put({{ $uniqueField.SubjectName }}).RunWithContext(ctx); err != nil {
+		return xerrors.Errorf("Insert.{{ printf "%sTable" $uniqueField.VarName }}.Put error: %w", err)
 	}
 {{ end }}
 	if err := repo.beforeInsert(ctx, subject); err != nil {
@@ -295,11 +294,11 @@ func (repo *{{ .RepositoryStructName }}) InsertWithTx(ctx context.Context, tx *d
     }
 {{- end }}
 {{- range $uniqueField := .UniqueFields }}
-    {{ printf "%s%sTable" $tableName $uniqueField.Name }} := repo.db.Table("{{ printf "%s%sUnique" $tableName $uniqueField.Name }}")
-    {{ printf "%s%sUniqueSubject" $tableName $uniqueField.Name }} := new({{ printf "%s%sUnique" $tableName $uniqueField.Name }})
-	{{ printf "%s%sUniqueSubject" $tableName $uniqueField.Name }}.{{ $uniqueField.Name }} = subject.{{ $uniqueField.Name }}
-	if err := {{ printf "%s%sTable" $tableName $uniqueField.Name }}.Put({{ printf "%s%sUniqueSubject" $tableName $uniqueField.Name }}).RunWithContext(ctx); err != nil {
-		return xerrors.Errorf("InsertWithTx.{{ printf "%s%sTable" $tableName $uniqueField.Name }}.Put error: %w", err)
+    {{ printf "%sTable" $uniqueField.VarName }} := repo.db.Table("{{ $uniqueField.StructName }}")
+    {{ $uniqueField.SubjectName }} := new({{ $uniqueField.StructName }})
+	{{ $uniqueField.SubjectName }}.{{ $uniqueField.Name }} = subject.{{ $uniqueField.Name }}
+	if err := {{ printf "%sTable" $uniqueField.VarName }}.Put({{ $uniqueField.SubjectName }}).RunWithContext(ctx); err != nil {
+		return xerrors.Errorf("InsertWithTx.{{ printf "%sTable" $uniqueField.VarName }}.Put error: %w", err)
 	}
 {{ end }}
 	if err := repo.beforeInsert(ctx, subject); err != nil {
@@ -365,14 +364,14 @@ func (repo *{{ .RepositoryStructName }}) Update(ctx context.Context, subject *{{
 	}
 {{- range $uniqueField := .UniqueFields }}
     if subject.{{ $uniqueField.Name }} != old.{{ $uniqueField.Name }} {
-        {{ printf "%s%sTable" $tableName $uniqueField.Name }} := repo.db.Table("{{ printf "%s%sUnique" $tableName $uniqueField.Name }}")
-        if err := {{ printf "%s%sTable" $tableName $uniqueField.Name }}.Delete("{{ $uniqueField.Name }}", subject.{{ $uniqueField.Name }}).RunWithContext(ctx); err != nil {
-        	return xerrors.Errorf("Update.{{ printf "%s%sTable" $tableName $uniqueField.Name }}.Delete error: %w", err)
+        {{ printf "%sTable" $uniqueField.VarName }} := repo.db.Table("{{ $uniqueField.StructName }}")
+        if err := {{ printf "%sTable" $uniqueField.VarName }}.Delete("{{ $uniqueField.Name }}", subject.{{ $uniqueField.Name }}).RunWithContext(ctx); err != nil {
+        	return xerrors.Errorf("Update.{{ printf "%sTable" $uniqueField.VarName }}.Delete error: %w", err)
         }
-        {{ printf "%s%sUniqueSubject" $tableName $uniqueField.Name }} := new({{ printf "%s%sUnique" $tableName $uniqueField.Name }})
-        {{ printf "%s%sUniqueSubject" $tableName $uniqueField.Name }}.{{ $uniqueField.Name }} = subject.{{ $uniqueField.Name }}
-        if err := {{ printf "%s%sTable" $tableName $uniqueField.Name }}.Put({{ printf "%s%sUniqueSubject" $tableName $uniqueField.Name }}).RunWithContext(ctx); err != nil {
-            return xerrors.Errorf("Update.{{ printf "%s%sTable" $tableName $uniqueField.Name }}.Put error: %w", err)
+        {{ $uniqueField.SubjectName }} := new({{ $uniqueField.StructName }})
+        {{ $uniqueField.SubjectName }}.{{ $uniqueField.Name }} = subject.{{ $uniqueField.Name }}
+        if err := {{ printf "%sTable" $uniqueField.VarName }}.Put({{ $uniqueField.SubjectName }}).RunWithContext(ctx); err != nil {
+            return xerrors.Errorf("Update.{{ printf "%sTable" $uniqueField.VarName }}.Put error: %w", err)
         }
 	}
 {{ end }}
@@ -396,12 +395,12 @@ func (repo *{{ .RepositoryStructName }}) UpdateWithTx(ctx context.Context, tx *d
 	}
 {{- range $uniqueField := .UniqueFields }}
     if subject.{{ $uniqueField.Name }} != old.{{ $uniqueField.Name }} {
-        {{ printf "%s%sDeleteRequest" $tableName $uniqueField.Name }} := repo.db.Table("{{ printf "%s%sUnique" $tableName $uniqueField.Name }}").Delete("{{ $uniqueField.Name }}", old.{{ $uniqueField.Name }})
+        {{ printf "%s%sDeleteRequest" $tableName $uniqueField.Name }} := repo.db.Table("{{ $uniqueField.StructName }}").Delete("{{ $uniqueField.Name }}", old.{{ $uniqueField.Name }})
         tx.Delete({{ printf "%s%sDeleteRequest" $tableName $uniqueField.Name }})
 
-        {{ printf "%s%sUniqueSubject" $tableName $uniqueField.Name }} := new({{ printf "%s%sUnique" $tableName $uniqueField.Name }})
-        {{ printf "%s%sUniqueSubject" $tableName $uniqueField.Name }}.{{ $uniqueField.Name }} = subject.{{ $uniqueField.Name }}
-        {{ printf "%s%sPutRequest" $tableName $uniqueField.Name }} := repo.db.Table("{{ printf "%s%sUnique" $tableName $uniqueField.Name }}").Put({{ printf "%s%sUniqueSubject" $tableName $uniqueField.Name }})
+        {{ $uniqueField.SubjectName }} := new({{ $uniqueField.StructName }})
+        {{ $uniqueField.SubjectName }}.{{ $uniqueField.Name }} = subject.{{ $uniqueField.Name }}
+        {{ printf "%s%sPutRequest" $tableName $uniqueField.Name }} := repo.db.Table("{{ $uniqueField.StructName }}").Put({{ $uniqueField.SubjectName }})
         tx.Put({{ printf "%s%sPutRequest" $tableName $uniqueField.Name }})
 	}
 {{ end }}
@@ -482,9 +481,9 @@ func (repo *{{ .RepositoryStructName }}) Delete(ctx context.Context, subject *{{
 		}
 	}
 {{- range $uniqueField := .UniqueFields }}
-    {{ printf "%s%sTable" $tableName $uniqueField.Name }} := repo.db.Table("{{ printf "%s%sUnique" $tableName $uniqueField.Name }}")
-	if err := {{ printf "%s%sTable" $tableName $uniqueField.Name }}.Delete("{{ $uniqueField.Name }}", subject.{{ $uniqueField.Name }}).RunWithContext(ctx); err != nil {
-		return xerrors.Errorf("Delete.{{ printf "%s%sTable" $tableName $uniqueField.Name }}.Delete error: %w", err)
+    {{ printf "%sTable" $uniqueField.VarName }} := repo.db.Table("{{ $uniqueField.StructName }}")
+	if err := {{ printf "%sTable" $uniqueField.VarName }}.Delete("{{ $uniqueField.Name }}", subject.{{ $uniqueField.Name }}).RunWithContext(ctx); err != nil {
+		return xerrors.Errorf("Delete.{{ printf "%sTable" $uniqueField.VarName }}.Delete error: %w", err)
 	}
 {{ end }}
 {{- if .MetaFields }}
@@ -507,9 +506,9 @@ func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}(ctx conte
         return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}.Get error: %w", err)
     }
 	for _, m := range repo.middleware {
-		c, err := m.BeforeDeleteBy{{ FuncNameByValue }}(ctx, {{ .HashKeyValueName }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }}{{ end }}, options...)
+		c, err := m.BeforeDelete(ctx, subject, options...)
 		if err != nil {
-			return xerrors.Errorf("DeleteBy.BeforeDeleteBy{{ FuncNameByValue }} error: %w", err)
+			return xerrors.Errorf("DeleteBy.BeforeDelete error: %w", err)
 		}
 		if !c {
 			continue
@@ -517,9 +516,9 @@ func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}(ctx conte
 	}
 {{- if .MetaFields }}
 {{- range $uniqueField := .UniqueFields }}
-    {{ printf "%s%sTable" $tableName $uniqueField.Name }} := repo.db.Table("{{ printf "%s%sUnique" $tableName $uniqueField.Name }}")
-	if err := {{ printf "%s%sTable" $tableName $uniqueField.Name }}.Delete("{{ $uniqueField.Name }}", subject.{{ $uniqueField.Name }}).RunWithContext(ctx); err != nil {
-		return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}.{{ printf "%s%sTable" $tableName $uniqueField.Name }}.Delete error: %w", err)
+    {{ printf "%sTable" $uniqueField.VarName }} := repo.db.Table("{{ $uniqueField.StructName }}")
+	if err := {{ printf "%sTable" $uniqueField.VarName }}.Delete("{{ $uniqueField.Name }}", subject.{{ $uniqueField.Name }}).RunWithContext(ctx); err != nil {
+		return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}.{{ printf "%sTable" $uniqueField.VarName }}.Delete error: %w", err)
 	}
 {{ end }}
 	if len(options) > 0 && options[0].Mode == DeleteModeSoft {
@@ -546,7 +545,7 @@ func (repo *{{ .RepositoryStructName }}) DeleteWithTx(ctx context.Context, tx *d
 		}
 	}
 {{- range $uniqueField := .UniqueFields }}
-    {{ printf "%s%sDeleteQuery" $tableName $uniqueField.Name }} := repo.db.Table("{{ printf "%s%sUnique" $tableName $uniqueField.Name }}").Delete("{{ $uniqueField.Name }}", subject.{{ $uniqueField.Name }})
+    {{ printf "%s%sDeleteQuery" $tableName $uniqueField.Name }} := repo.db.Table("{{ $uniqueField.StructName }}").Delete("{{ $uniqueField.Name }}", subject.{{ $uniqueField.Name }})
 	if err := tx.Delete({{ printf "%s%sDeleteQuery" $tableName $uniqueField.Name }}).RunWithContext(ctx); err != nil {
 		return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}WithTx.Delete error: %w", err)
 	}
@@ -574,9 +573,9 @@ func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}WithTx(ctx
     }
 
 	for _, m := range repo.middleware {
-		c, err := m.BeforeDeleteBy{{ FuncNameByValue }}(ctx, {{ .HashKeyValueName }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }}{{ end }}, options...)
+		c, err := m.BeforeDelete(ctx, subject, options...)
 		if err != nil {
-			return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}WithTx.BeforeDeleteBy{{ FuncNameByValue }} error: %w", err)
+			return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}WithTx.BeforeDelete error: %w", err)
 		}
 		if !c {
 			continue
@@ -584,7 +583,7 @@ func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}WithTx(ctx
 	}
 {{- if .MetaFields }}
 {{- range $uniqueField := .UniqueFields }}
-    {{ printf "%s%sDeleteQuery" $tableName $uniqueField.Name }} := repo.db.Table("{{ printf "%s%sUnique" $tableName $uniqueField.Name }}").Delete("{{ $uniqueField.Name }}", subject.{{ $uniqueField.Name }})
+    {{ printf "%s%sDeleteQuery" $tableName $uniqueField.Name }} := repo.db.Table("{{ $uniqueField.StructName }}").Delete("{{ $uniqueField.Name }}", subject.{{ $uniqueField.Name }})
 	if err := tx.Delete({{ printf "%s%sDeleteQuery" $tableName $uniqueField.Name }}).RunWithContext(ctx); err != nil {
 		return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}WithTx.Delete error: %w", err)
 	}
