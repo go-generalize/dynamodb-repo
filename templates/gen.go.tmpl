@@ -363,7 +363,19 @@ func (repo *{{ .RepositoryStructName }}) Update(ctx context.Context, subject *{{
 	if err != nil {
 		return xerrors.Errorf("error in Get method: %w", err)
 	}
-
+{{- range $uniqueField := .UniqueFields }}
+    if subject.{{ $uniqueField.Name }} != old.{{ $uniqueField.Name }} {
+        {{ printf "%s%sTable" $tableName $uniqueField.Name }} := repo.db.Table("{{ printf "%s%sUnique" $tableName $uniqueField.Name }}")
+        if err := {{ printf "%s%sTable" $tableName $uniqueField.Name }}.Delete("{{ $uniqueField.Name }}", subject.{{ $uniqueField.Name }}).RunWithContext(ctx); err != nil {
+        	return xerrors.Errorf("Update.{{ printf "%s%sTable" $tableName $uniqueField.Name }}.Delete error: %w", err)
+        }
+        {{ printf "%s%sUniqueSubject" $tableName $uniqueField.Name }} := new({{ printf "%s%sUnique" $tableName $uniqueField.Name }})
+        {{ printf "%s%sUniqueSubject" $tableName $uniqueField.Name }}.{{ $uniqueField.Name }} = subject.{{ $uniqueField.Name }}
+        if err := {{ printf "%s%sTable" $tableName $uniqueField.Name }}.Put({{ printf "%s%sUniqueSubject" $tableName $uniqueField.Name }}).RunWithContext(ctx); err != nil {
+            return xerrors.Errorf("Update.{{ printf "%s%sTable" $tableName $uniqueField.Name }}.Put error: %w", err)
+        }
+	}
+{{ end }}
 	query, err := repo.updateQuery(ctx, old, subject)
 	if err != nil {
 		return xerrors.Errorf("Update.updateQuery error: %w", err)
@@ -382,7 +394,17 @@ func (repo *{{ .RepositoryStructName }}) UpdateWithTx(ctx context.Context, tx *d
 	if err != nil {
 		return xerrors.Errorf("error in GetWithTx method: %w", err)
 	}
+{{- range $uniqueField := .UniqueFields }}
+    if subject.{{ $uniqueField.Name }} != old.{{ $uniqueField.Name }} {
+        {{ printf "%s%sDeleteRequest" $tableName $uniqueField.Name }} := repo.db.Table("{{ printf "%s%sUnique" $tableName $uniqueField.Name }}").Delete("{{ $uniqueField.Name }}", old.{{ $uniqueField.Name }})
+        tx.Delete({{ printf "%s%sDeleteRequest" $tableName $uniqueField.Name }})
 
+        {{ printf "%s%sUniqueSubject" $tableName $uniqueField.Name }} := new({{ printf "%s%sUnique" $tableName $uniqueField.Name }})
+        {{ printf "%s%sUniqueSubject" $tableName $uniqueField.Name }}.{{ $uniqueField.Name }} = subject.{{ $uniqueField.Name }}
+        {{ printf "%s%sPutRequest" $tableName $uniqueField.Name }} := repo.db.Table("{{ printf "%s%sUnique" $tableName $uniqueField.Name }}").Put({{ printf "%s%sUniqueSubject" $tableName $uniqueField.Name }})
+        tx.Put({{ printf "%s%sPutRequest" $tableName $uniqueField.Name }})
+	}
+{{ end }}
 	query, err := repo.updateQuery(ctx, old, subject)
 	if err != nil {
 		return xerrors.Errorf("UpdateWithTx.updateQuery error: %w", err)
