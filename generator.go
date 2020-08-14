@@ -142,7 +142,7 @@ func (g *generator) generateMisc(writer io.Writer) {
 	}
 }
 
-// generates
+// define functions in template files
 func (g *generator) setFuncMap() template.FuncMap {
 	return template.FuncMap{
 		"Parse": func(fieldType string) string {
