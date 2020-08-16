@@ -73,7 +73,7 @@ type {{ $uniqueField.StructName }} struct {
 }
 {{ end }}
 // Create{{ .StructName }}DepsTable Create a dependency table for {{ .TableName }}
-func Create{{ .StructName }}DepsTable(db *dynamo.DB) error {
+func Create{{ .StructName }}DepsTable(ctx context.Context, db *dynamo.DB) error {
     structs := map[string]interface{}{
 {{- range $uniqueField := .UniqueFields }}
         "{{ $uniqueField.StructName }}": new({{ $uniqueField.StructName }}),
@@ -81,10 +81,13 @@ func Create{{ .StructName }}DepsTable(db *dynamo.DB) error {
     }
 
     for name, s := range structs {
-    	createTable := db.CreateTable(name, s)
+    	_, err := db.Table(name).Describe().RunWithContext(ctx)
+    	if err != nil && xerrors.Is(err, dynamo.ErrNotFound) {
+            return err
+        }
 
-        err := createTable.Run()
-        if err != nil {
+        createTable := db.CreateTable(name, s)
+        if err := createTable.RunWithContext(ctx); err != nil {
             return xerrors.Errorf("failed to Create{{ .StructName }}DepsTable by {{ .RepositoryInterfaceName }} err: %w", err)
         }
 	}
@@ -151,7 +154,7 @@ func (repo *lockRepository) validateUnique(ctx context.Context, subject *{{ .Str
 {{- range $uniqueField := .UniqueFields }}
     var {{ $uniqueField.SubjectName }} *{{ $uniqueField.StructName }} = nil
     {{ printf "%sTable" $uniqueField.VarName }} := repo.db.Table("{{ $uniqueField.StructName }}")
-    if err := {{ printf "%sTable" $uniqueField.VarName }}.Get("{{ $uniqueField.Name }}", subject.{{ $uniqueField.Name }}).OneWithContext(ctx, &{{ $uniqueField.SubjectName }});
+    if err := {{ printf "%sTable" $uniqueField.VarName }}.Get("{{ $uniqueField.Name }}", subject.{{ $uniqueField.Name }}).OneWithContext(ctx, {{ $uniqueField.SubjectName }});
         err != nil && !xerrors.Is(err, dynamo.ErrNotFound) {
         return xerrors.Errorf("validateUnique.Get error: %w", err)
     }

@@ -497,8 +497,12 @@ func TestDynamoDB(t *testing.T) {
 
 func TestDynamoDBWithMeta(t *testing.T) {
 	client := initDynamoClient(t)
+	client.Table("PrefixLockNameUnique").DeleteTable().Run()
+	client.Table("PrefixLockName2Unique").DeleteTable().Run()
 
-	model.CreateLockDepsTable(client)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	model.CreateLockDepsTable(ctx, client)
 	lockRepo := model.NewLockRepository(client)
 
 	t.Run("get_softDeletedItem", func(t *testing.T) {
@@ -506,9 +510,11 @@ func TestDynamoDBWithMeta(t *testing.T) {
 		defer cancel()
 
 		name := "test_name"
+		name2 := "hogehoge"
 		l := &model.Lock{
-			ID:   9,
-			Name: name,
+			ID:    9,
+			Name:  name,
+			Name2: name2,
 		}
 		err := lockRepo.Insert(ctx, l)
 		if err != nil {
@@ -546,9 +552,11 @@ func TestDynamoDBWithMeta(t *testing.T) {
 		defer cancel()
 
 		name := "test_name"
+		name2 := "hogehoge"
 		l := &model.Lock{
-			ID:   19,
-			Name: name,
+			ID:    19,
+			Name:  name,
+			Name2: name2,
 		}
 		err := lockRepo.Insert(ctx, l)
 		if err != nil {
@@ -575,9 +583,11 @@ func TestDynamoDBWithMeta(t *testing.T) {
 		defer cancel()
 
 		name := "test_name"
+		name2 := "hogehoge"
 		l := &model.Lock{
-			ID:   29,
-			Name: name,
+			ID:    29,
+			Name:  name,
+			Name2: name2,
 		}
 		err := lockRepo.Insert(ctx, l)
 		if err != nil {

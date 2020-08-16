@@ -193,6 +193,9 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 			fieldInfo.Tags = &FieldParsedTags{
 				Raw: sp,
 			}
+			for index, s := range sp {
+				sp[index] = strings.TrimSpace(s)
+			}
 
 			if err := dynamoTagCheck(pos, sp[0]); err != nil {
 				return xerrors.Errorf("tag validator failed: %w", err)
@@ -211,6 +214,12 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 			}
 
 			fieldInfo.Tags = parseTags(sp)
+			if fieldInfo.Tags.IsUnique {
+				if sp[0] != "" {
+					fieldInfo.DynamoTag = sp[0]
+				}
+				gen.FieldInfos = append(gen.FieldInfos, fieldInfo)
+			}
 
 			if err := keyFieldHandle(gen, sp[0], fieldInfo.Tags.KeyKind, name, typeName, pos); err != nil {
 				return xerrors.Errorf("error in keyFieldHandle: %w", err)
@@ -229,10 +238,12 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 			continue
 		}
 		varName := fmt.Sprintf("%s%s", gen.TableName, f.Field)
+		lowVarName := strings.ToLower(string(varName[0])) + varName[1:]
+
 		gen.UniqueFields[f.Field] = &UniqueField{
-			VarName:     varName,
+			VarName:     lowVarName,
 			StructName:  fmt.Sprintf("%sUnique", varName),
-			SubjectName: fmt.Sprintf("%sSubject", varName),
+			SubjectName: fmt.Sprintf("%sSubject", lowVarName),
 			Field: field.Field{
 				Name: f.Field,
 				Type: f.FieldType,
