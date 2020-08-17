@@ -309,10 +309,10 @@ func TestDynamoDBListNameWithRangeKey(t *testing.T) {
 	now := dynamodbattribute.UnixTime(time.Unix(0, time.Now().UnixNano()))
 	desc := "Hello, World!"
 
-	tks := make([]*model.Name, 0)
+	names := make([]*model.Name, 0)
 	for i := int64(1); i <= 10; i++ {
-		tk := &model.Name{
-			ID:        i,
+		n := &model.Name{
+			// ID: 自動生成
 			Created:   now,
 			Desc:      fmt.Sprintf("%s%d", desc, i),
 			Desc2:     fmt.Sprintf("%s%d", desc, i),
@@ -326,13 +326,15 @@ func TestDynamoDBListNameWithRangeKey(t *testing.T) {
 				},
 			},
 		}
-		tks = append(tks, tk)
-		pairs[i] = int(i)
+		names = append(names, n)
 	}
 
-	err := nameRepo.InsertMulti(ctx, tks)
+	err := nameRepo.InsertMulti(ctx, names)
 	if err != nil {
 		t.Fatalf("%+v", err)
+	}
+	for index, n := range names {
+		pairs[n.ID] = int(index + 1)
 	}
 
 	t.Run("original struct or slices", func(t *testing.T) {
