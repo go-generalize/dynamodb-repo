@@ -120,6 +120,7 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 		}
 	}
 	gen.MetaFields = metaList
+	fieldInfos := make([]*FieldInfo, 0, len(structType.Fields.List))
 
 	for _, field := range structType.Fields.List {
 		// structの各fieldを調査
@@ -163,8 +164,10 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 				DynamoTag: name,
 				Field:     name,
 				FieldType: typeName,
+				Tags:      nil,
 			}
 			gen.FieldInfos = append(gen.FieldInfos, fieldInfo)
+			fieldInfos = append(fieldInfos, fieldInfo)
 			continue
 		}
 
@@ -181,11 +184,18 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 				FieldType: typeName,
 			}
 			dynamoTag, err := tags.Get("dynamo")
+			fieldInfos = append(fieldInfos, fieldInfo)
 			if err != nil {
 				gen.FieldInfos = append(gen.FieldInfos, fieldInfo)
 				continue
 			}
 			sp := strings.Split(dynamoTag.Value(), ",")
+			fieldInfo.Tags = &FieldParsedTags{
+				Raw: sp,
+			}
+			for index, s := range sp {
+				sp[index] = strings.TrimSpace(s)
+			}
 
 			if err := dynamoTagCheck(pos, sp[0]); err != nil {
 				return xerrors.Errorf("tag validator failed: %w", err)
@@ -197,11 +207,21 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 					case UpdatedAt, UpdateTime:
 						gen.UpdateTimeDynamoTag = sp[0]
 					}
+					fieldInfo.Tags.Name = sp[0]
 				}
 				gen.FieldInfos = append(gen.FieldInfos, fieldInfo)
 				continue
 			}
-			if err := keyFieldHandle(gen, sp[0], sp[1], name, typeName, pos); err != nil {
+
+			fieldInfo.Tags = parseTags(sp)
+			if fieldInfo.Tags.IsUnique {
+				if sp[0] != "" {
+					fieldInfo.DynamoTag = sp[0]
+				}
+				gen.FieldInfos = append(gen.FieldInfos, fieldInfo)
+			}
+
+			if err := keyFieldHandle(gen, sp[0], fieldInfo.Tags.KeyKind, name, typeName, pos); err != nil {
 				return xerrors.Errorf("error in keyFieldHandle: %w", err)
 			}
 			if gen.HashKeyFieldName != "" {
@@ -210,6 +230,28 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 				}
 			}
 		}
+	}
+
+	gen.UniqueFields = make(map[string]*UniqueField)
+	for _, f := range fieldInfos {
+		if f.Tags == nil || !f.Tags.IsUnique {
+			continue
+		}
+		varName := fmt.Sprintf("%s%s", gen.TableName, f.Field)
+		lowVarName := strings.ToLower(string(varName[0])) + varName[1:]
+
+		gen.UniqueFields[f.Field] = &UniqueField{
+			VarName:     lowVarName,
+			StructName:  fmt.Sprintf("%sUnique", varName),
+			SubjectName: fmt.Sprintf("%sSubject", lowVarName),
+			Field: field.Field{
+				Name: f.Field,
+				Type: f.FieldType,
+			},
+		}
+	}
+	if len(gen.UniqueFields) == 0 {
+		gen.UniqueFields = nil
 	}
 
 	if gen.EnableCreateTime || gen.EnableUpdateTime {
@@ -255,9 +297,31 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 	return nil
 }
 
-func keyFieldHandle(gen *generator, label, keyKind, name, typeName, pos string) error {
+func parseTags(tags []string) *FieldParsedTags {
+	p := new(FieldParsedTags)
+	p.Raw = tags
+
+	for i, tag := range tags {
+		if i == 0 {
+			p.Name = tag
+			continue
+		}
+
+		switch strings.ToLower(tag) {
+		case "hash":
+			p.KeyKind = KeyKindHash
+		case "range":
+			p.KeyKind = KeyKindRange
+		case "unique":
+			p.IsUnique = true
+		}
+	}
+	return p
+}
+
+func keyFieldHandle(gen *generator, label string, keyKind KeyKind, name, typeName, pos string) error {
 	switch keyKind {
-	case "hash":
+	case KeyKindHash:
 		gen.HashKeyFieldName = name
 		gen.HashKeyFieldType = typeName
 
@@ -273,7 +337,7 @@ func keyFieldHandle(gen *generator, label, keyKind, name, typeName, pos string) 
 		} else {
 			gen.HashKeyFieldTagName = label
 		}
-	case "range":
+	case KeyKindRange:
 		if gen.RangeKeyFieldName != "" || gen.RangeKeyFieldType != "" {
 			return xerrors.Errorf("%s: RangeKey already exists", pos)
 		}

@@ -1,3 +1,4 @@
+{{- $tableName := .TableName }}
 // THIS FILE IS A GENERATED CODE. DO NOT EDIT
 // generated version: {{ .AppVersion }}
 package {{ .PackageName }}
@@ -58,7 +59,6 @@ type {{ $middlewareName }} interface {
 	BeforeInsert(ctx context.Context, subject *{{ .StructName }}) (bool, error)
 	BeforeUpdate(ctx context.Context, subject *{{ .StructName }}) (bool, error)
 	BeforeDelete(ctx context.Context, subject *{{ .StructName }}, options... DeleteOption) (bool, error)
-	BeforeDeleteBy{{ FuncNameByValue }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options... DeleteOption) (bool, error)
 }
 
 type {{ .RepositoryStructName }} struct {
@@ -66,7 +66,35 @@ type {{ .RepositoryStructName }} struct {
 	table      dynamo.Table
 	middleware []{{ $middlewareName }}
 }
+{{ if .UniqueFields }}
+{{- range $uniqueField := .UniqueFields }}
+type {{ $uniqueField.StructName }} struct {
+	{{ $uniqueField.Name }} {{ $uniqueField.Type }} `dynamo:",hash"`
+}
+{{ end }}
+// Create{{ .StructName }}DepsTable Create a dependency table for {{ .TableName }}
+func Create{{ .StructName }}DepsTable(ctx context.Context, db *dynamo.DB) error {
+    structs := map[string]interface{}{
+{{- range $uniqueField := .UniqueFields }}
+        "{{ $uniqueField.StructName }}": new({{ $uniqueField.StructName }}),
+{{- end }}
+    }
 
+    for name, s := range structs {
+    	_, err := db.Table(name).Describe().RunWithContext(ctx)
+    	if err != nil && xerrors.Is(err, dynamo.ErrNotFound) {
+            return err
+        }
+
+        createTable := db.CreateTable(name, s)
+        if err := createTable.RunWithContext(ctx); err != nil {
+            return xerrors.Errorf("failed to Create{{ .StructName }}DepsTable by {{ .RepositoryInterfaceName }} err: %w", err)
+        }
+	}
+
+	return nil
+}
+{{ end }}
 // New{{ .RepositoryInterfaceName }} constructor
 func New{{ .RepositoryInterfaceName }}(db *dynamo.DB, middleware... {{ $middlewareName }}) {{ .RepositoryInterfaceName }} {
 	return &{{ .RepositoryStructName }}{
@@ -120,7 +148,23 @@ func (repo *{{ .RepositoryStructName }}) List(name string, value interface{}) *d
 func (repo *{{ .RepositoryStructName }}) Scan() *dynamo.Scan {
 	return repo.table.Scan()
 }
-
+{{ if .UniqueFields }}
+// validateUnique unique check
+func (repo *lockRepository) validateUnique(ctx context.Context, subject *{{ .StructName }}) error {
+{{- range $uniqueField := .UniqueFields }}
+    var {{ $uniqueField.SubjectName }} *{{ $uniqueField.StructName }} = nil
+    {{ printf "%sTable" $uniqueField.VarName }} := repo.db.Table("{{ $uniqueField.StructName }}")
+    if err := {{ printf "%sTable" $uniqueField.VarName }}.Get("{{ $uniqueField.Name }}", subject.{{ $uniqueField.Name }}).OneWithContext(ctx, {{ $uniqueField.SubjectName }});
+        err != nil && !xerrors.Is(err, dynamo.ErrNotFound) {
+        return xerrors.Errorf("validateUnique.Get error: %w", err)
+    }
+    if {{ $uniqueField.SubjectName }} != nil {
+        return xerrors.New("{{ $uniqueField.Name }} has to be unique, but it already exists.")
+    }
+{{ end }}
+    return nil
+}
+{{ end }}
 // Get 処理中の {{ .StructName }} の取得処理一切の責任を持ち、これを行う
 func (repo *{{ .RepositoryStructName }}) Get(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options... GetOption) (*{{ .StructName }}, error) {
 	subject := new({{ .StructName }})
@@ -214,6 +258,19 @@ func (repo *{{ .RepositoryStructName }}) Insert(ctx context.Context, subject *{{
 		return xerrors.New("{{ .HashKeyFieldName }} is required")
 	}
 {{- end }}
+{{- if $uniqueField := .UniqueFields }}
+    if err := repo.validateUnique(ctx, subject); err != nil {
+        return xerrors.Errorf("Insert.validateUnique error: %w", err)
+    }
+{{- end }}
+{{- range $uniqueField := .UniqueFields }}
+    {{ printf "%sTable" $uniqueField.VarName }} := repo.db.Table("{{ $uniqueField.StructName }}")
+    {{ $uniqueField.SubjectName }} := new({{ $uniqueField.StructName }})
+	{{ $uniqueField.SubjectName }}.{{ $uniqueField.Name }} = subject.{{ $uniqueField.Name }}
+	if err := {{ printf "%sTable" $uniqueField.VarName }}.Put({{ $uniqueField.SubjectName }}).RunWithContext(ctx); err != nil {
+		return xerrors.Errorf("Insert.{{ printf "%sTable" $uniqueField.VarName }}.Put error: %w", err)
+	}
+{{ end }}
 	if err := repo.beforeInsert(ctx, subject); err != nil {
 		return xerrors.Errorf("Insert.beforeInsert error: %w", err)
 	}
@@ -234,6 +291,19 @@ func (repo *{{ .RepositoryStructName }}) InsertWithTx(ctx context.Context, tx *d
 		return xerrors.New("{{ .HashKeyFieldName }} is required")
 	}
 {{- end }}
+{{- if $uniqueField := .UniqueFields }}
+    if err := repo.validateUnique(ctx, subject); err != nil {
+        return xerrors.Errorf("Insert.validateUnique error: %w", err)
+    }
+{{- end }}
+{{- range $uniqueField := .UniqueFields }}
+    {{ printf "%sTable" $uniqueField.VarName }} := repo.db.Table("{{ $uniqueField.StructName }}")
+    {{ $uniqueField.SubjectName }} := new({{ $uniqueField.StructName }})
+	{{ $uniqueField.SubjectName }}.{{ $uniqueField.Name }} = subject.{{ $uniqueField.Name }}
+	if err := {{ printf "%sTable" $uniqueField.VarName }}.Put({{ $uniqueField.SubjectName }}).RunWithContext(ctx); err != nil {
+		return xerrors.Errorf("InsertWithTx.{{ printf "%sTable" $uniqueField.VarName }}.Put error: %w", err)
+	}
+{{ end }}
 	if err := repo.beforeInsert(ctx, subject); err != nil {
 		return xerrors.Errorf("InsertWithTx.beforeInsert error: %w", err)
 	}
@@ -295,7 +365,19 @@ func (repo *{{ .RepositoryStructName }}) Update(ctx context.Context, subject *{{
 	if err != nil {
 		return xerrors.Errorf("error in Get method: %w", err)
 	}
-
+{{- range $uniqueField := .UniqueFields }}
+    if subject.{{ $uniqueField.Name }} != old.{{ $uniqueField.Name }} {
+        {{ printf "%sTable" $uniqueField.VarName }} := repo.db.Table("{{ $uniqueField.StructName }}")
+        if err := {{ printf "%sTable" $uniqueField.VarName }}.Delete("{{ $uniqueField.Name }}", subject.{{ $uniqueField.Name }}).RunWithContext(ctx); err != nil {
+        	return xerrors.Errorf("Update.{{ printf "%sTable" $uniqueField.VarName }}.Delete error: %w", err)
+        }
+        {{ $uniqueField.SubjectName }} := new({{ $uniqueField.StructName }})
+        {{ $uniqueField.SubjectName }}.{{ $uniqueField.Name }} = subject.{{ $uniqueField.Name }}
+        if err := {{ printf "%sTable" $uniqueField.VarName }}.Put({{ $uniqueField.SubjectName }}).RunWithContext(ctx); err != nil {
+            return xerrors.Errorf("Update.{{ printf "%sTable" $uniqueField.VarName }}.Put error: %w", err)
+        }
+	}
+{{ end }}
 	query, err := repo.updateQuery(ctx, old, subject)
 	if err != nil {
 		return xerrors.Errorf("Update.updateQuery error: %w", err)
@@ -314,7 +396,17 @@ func (repo *{{ .RepositoryStructName }}) UpdateWithTx(ctx context.Context, tx *d
 	if err != nil {
 		return xerrors.Errorf("error in GetWithTx method: %w", err)
 	}
+{{- range $uniqueField := .UniqueFields }}
+    if subject.{{ $uniqueField.Name }} != old.{{ $uniqueField.Name }} {
+        {{ printf "%s%sDeleteRequest" $tableName $uniqueField.Name }} := repo.db.Table("{{ $uniqueField.StructName }}").Delete("{{ $uniqueField.Name }}", old.{{ $uniqueField.Name }})
+        tx.Delete({{ printf "%s%sDeleteRequest" $tableName $uniqueField.Name }})
 
+        {{ $uniqueField.SubjectName }} := new({{ $uniqueField.StructName }})
+        {{ $uniqueField.SubjectName }}.{{ $uniqueField.Name }} = subject.{{ $uniqueField.Name }}
+        {{ printf "%s%sPutRequest" $tableName $uniqueField.Name }} := repo.db.Table("{{ $uniqueField.StructName }}").Put({{ $uniqueField.SubjectName }})
+        tx.Put({{ printf "%s%sPutRequest" $tableName $uniqueField.Name }})
+	}
+{{ end }}
 	query, err := repo.updateQuery(ctx, old, subject)
 	if err != nil {
 		return xerrors.Errorf("UpdateWithTx.updateQuery error: %w", err)
@@ -391,8 +483,13 @@ func (repo *{{ .RepositoryStructName }}) Delete(ctx context.Context, subject *{{
 			continue
 		}
 	}
+{{- range $uniqueField := .UniqueFields }}
+    {{ printf "%sTable" $uniqueField.VarName }} := repo.db.Table("{{ $uniqueField.StructName }}")
+	if err := {{ printf "%sTable" $uniqueField.VarName }}.Delete("{{ $uniqueField.Name }}", subject.{{ $uniqueField.Name }}).RunWithContext(ctx); err != nil {
+		return xerrors.Errorf("Delete.{{ printf "%sTable" $uniqueField.VarName }}.Delete error: %w", err)
+	}
+{{ end }}
 {{- if .MetaFields }}
-
 	if len(options) > 0 && options[0].Mode == DeleteModeSoft {
 		subject.{{ GetMetaKeyWithPath .MetaFields "DeletedAt" }} = repo.getNowPointer()
 		q, err := repo.forceUpdateQuery(ctx, subject)
@@ -407,23 +504,27 @@ func (repo *{{ .RepositoryStructName }}) Delete(ctx context.Context, subject *{{
 
 // DeleteBy{{ .HashKeyFieldName }} 処理中の {{ .StructName }} の{{ .HashKeyFieldName }}から削除処理一切の責任を持ち、これを行う
 func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options... DeleteOption) error {
+    subject, err := repo.Get(ctx, {{ .HashKeyValueName }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }}{{ end }})
+    if err != nil {
+        return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}.Get error: %w", err)
+    }
 	for _, m := range repo.middleware {
-		c, err := m.BeforeDeleteBy{{ FuncNameByValue }}(ctx, {{ .HashKeyValueName }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }}{{ end }}, options...)
+		c, err := m.BeforeDelete(ctx, subject, options...)
 		if err != nil {
-			return xerrors.Errorf("DeleteBy.BeforeDeleteBy{{ FuncNameByValue }} error: %w", err)
+			return xerrors.Errorf("DeleteBy.BeforeDelete error: %w", err)
 		}
 		if !c {
 			continue
 		}
 	}
 {{- if .MetaFields }}
-
+{{- range $uniqueField := .UniqueFields }}
+    {{ printf "%sTable" $uniqueField.VarName }} := repo.db.Table("{{ $uniqueField.StructName }}")
+	if err := {{ printf "%sTable" $uniqueField.VarName }}.Delete("{{ $uniqueField.Name }}", subject.{{ $uniqueField.Name }}).RunWithContext(ctx); err != nil {
+		return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}.{{ printf "%sTable" $uniqueField.VarName }}.Delete error: %w", err)
+	}
+{{ end }}
 	if len(options) > 0 && options[0].Mode == DeleteModeSoft {
-		subject, err := repo.Get(ctx, {{ .HashKeyValueName }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }}{{ end }})
-		if err != nil {
-			return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}.Get error: %w", err)
-		}
-
 		subject.{{ GetMetaKeyWithPath .MetaFields "DeletedAt" }} = repo.getNowPointer()
 		q, err := repo.forceUpdateQuery(ctx, subject)
 		if err != nil {
@@ -446,8 +547,13 @@ func (repo *{{ .RepositoryStructName }}) DeleteWithTx(ctx context.Context, tx *d
 			continue
 		}
 	}
+{{- range $uniqueField := .UniqueFields }}
+    {{ printf "%s%sDeleteQuery" $tableName $uniqueField.Name }} := repo.db.Table("{{ $uniqueField.StructName }}").Delete("{{ $uniqueField.Name }}", subject.{{ $uniqueField.Name }})
+	if err := tx.Delete({{ printf "%s%sDeleteQuery" $tableName $uniqueField.Name }}).RunWithContext(ctx); err != nil {
+		return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}WithTx.Delete error: %w", err)
+	}
+{{ end }}
 {{- if .MetaFields }}
-
 	if len(options) > 0 && options[0].Mode == DeleteModeSoft {
 		subject.{{ GetMetaKeyWithPath .MetaFields "DeletedAt" }} = repo.getNowPointer()
 		q, err := repo.forceUpdateQuery(ctx, subject)
@@ -457,30 +563,35 @@ func (repo *{{ .RepositoryStructName }}) DeleteWithTx(ctx context.Context, tx *d
 		tx.Update(q)
 		return nil
 	}
-{{ end  }}
+{{ end }}
 	tx.Delete(repo.table.Delete(repo.hashPair(subject)){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", subject.{{ .RangeKeyFieldName }}){{ end }})
 	return nil
 }
 
 // DeleteBy{{ .HashKeyFieldName }}WithTx トランザクション中の {{ .StructName }} の{{ .HashKeyFieldName }}から削除処理を行う
 func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}WithTx(ctx context.Context, tx *dynamo.WriteTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options... DeleteOption) error {
+    subject, err := repo.Get(ctx, {{ .HashKeyValueName }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }}{{ end }})
+    if err != nil {
+        return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}WithTx.Get error: %w", err)
+    }
+
 	for _, m := range repo.middleware {
-		c, err := m.BeforeDeleteBy{{ FuncNameByValue }}(ctx, {{ .HashKeyValueName }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }}{{ end }}, options...)
+		c, err := m.BeforeDelete(ctx, subject, options...)
 		if err != nil {
-			return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}WithTx.BeforeDeleteBy{{ FuncNameByValue }} error: %w", err)
+			return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}WithTx.BeforeDelete error: %w", err)
 		}
 		if !c {
 			continue
 		}
 	}
 {{- if .MetaFields }}
-
+{{- range $uniqueField := .UniqueFields }}
+    {{ printf "%s%sDeleteQuery" $tableName $uniqueField.Name }} := repo.db.Table("{{ $uniqueField.StructName }}").Delete("{{ $uniqueField.Name }}", subject.{{ $uniqueField.Name }})
+	if err := tx.Delete({{ printf "%s%sDeleteQuery" $tableName $uniqueField.Name }}).RunWithContext(ctx); err != nil {
+		return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}WithTx.Delete error: %w", err)
+	}
+{{ end }}
 	if len(options) > 0 && options[0].Mode == DeleteModeSoft {
-		subject, err := repo.Get(ctx, {{ .HashKeyValueName }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }}{{ end }})
-		if err != nil {
-			return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}WithTx.Get error: %w", err)
-		}
-
 		subject.{{ GetMetaKeyWithPath .MetaFields "DeletedAt" }} = repo.getNowPointer()
 		q, err := repo.forceUpdateQuery(ctx, subject)
 		if err != nil {
