@@ -17,7 +17,7 @@ jobs:
     steps:
       - name: Set up AWS CLI
         run: |
-          apt install -y awscli
+          sudo apt install -y awscli
 
       - name: Set up Go 1.12
         uses: actions/setup-go@v1
