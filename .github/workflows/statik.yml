@@ -6,12 +6,21 @@ on:
       - issue/66_citest
 
 jobs:
-  test:
+  generate:
     runs-on: ubuntu-latest
     steps:
       - name: Make statik
         run: |
           make statik
+
+      - name: Set up Go 1.12
+        uses: actions/setup-go@v1
+        with:
+          go-version: 1.12
+        id: go
+
+      - uses: actions/checkout@v2
+
       - name: Push
         run: |
           git remote add github "https://$GITHUB_ACTOR:$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY.git"
