@@ -80,4 +80,5 @@ run:
 service:
   golangci-lint-version: 1.23.x
   prepare:
-    - echo "here I can run custom commands, but no preparation needed for this repo"
+    - echo "here I can run custom commands"
+    - make statik
