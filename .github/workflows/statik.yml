@@ -8,6 +8,8 @@ on:
 jobs:
   generate:
     runs-on: ubuntu-latest
+    env:
+      GO111MODULE: on
     steps:
       - name: Make statik
         run: |
@@ -27,7 +29,9 @@ jobs:
           git pull github ${GITHUB_REF} --ff-only
           PATH="$PATH":"$HOME"/go/bin
           go get github.com/rakyll/statik
+          pwd # debug
+          ls -lah # debug
           make statik
           git add -f statik/
-          git commit -m "Update statik"
+          git commit -m "update: statik"
           git push github HEAD:${GITHUB_REF}
