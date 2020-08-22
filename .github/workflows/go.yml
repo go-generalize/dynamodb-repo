@@ -29,7 +29,7 @@ jobs:
 
       - name: Make statik
         run: |
-          PATH="$PATH":/root/go/bin
+          PATH="$PATH":"$HOME"/go/bin
           go get github.com/rakyll/statik
           make statik
 
