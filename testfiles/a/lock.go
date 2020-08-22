@@ -24,7 +24,8 @@ type Nest1Type struct {
 	Nest1 Nest2Type
 }
 type Lock struct {
-	ID   int64  `dynamo:"id,hash"`
-	Name string `dynamo:"name"`
-	Meta Nest1Type
+	ID    int64  `dynamo:"id,hash"`
+	Name  string `dynamo:"name,unique"`
+	Name2 string `dynamo:"name2,unique"`
+	Meta  Nest1Type
 }
