@@ -29,6 +29,7 @@ jobs:
 
       - name: Make statik
         run: |
+          go get github.com/rakyll/statik
           make statik
 
       - name: Run tests
