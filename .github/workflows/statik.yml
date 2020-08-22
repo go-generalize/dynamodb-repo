@@ -16,7 +16,7 @@ jobs:
         run: |
           git remote add github "https://$GITHUB_ACTOR:$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY.git"
           git pull github ${GITHUB_REF} --ff-only
-          PATH="$PATH":/root/go/bin
+          PATH="$PATH":"$HOME"/go/bin
           go get github.com/rakyll/statik
           make statik
           git add -f statik/
