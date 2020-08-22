@@ -23,17 +23,20 @@ jobs:
         run: |
           git remote add github "https://$GITHUB_ACTOR:$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY.git"
           git pull github ${GITHUB_REF} --ff-only
-          PATH="$PATH":"$HOME"/go/bin
-          go get github.com/rakyll/statik
 
       - name: Debug
         run: |
           pwd
           ls -lah
 
-      - name: Make and Commit
+      - name: Make
         run: |
+          PATH="$PATH":"$HOME"/go/bin
+          go get github.com/rakyll/statik
           make statik
+
+      - name: Commit
+        run: |
           git add -f statik/
           git commit -m "update: statik"
           git push github HEAD:${GITHUB_REF}
