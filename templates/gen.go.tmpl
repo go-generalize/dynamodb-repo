@@ -25,29 +25,29 @@ import (
 // {{ .RepositoryInterfaceName }} Repository of {{ .StructName }}
 type {{ .RepositoryInterfaceName }} interface {
 	// Single
-	Get(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options... GetOption) (*{{ .StructName }}, error)
+	Get(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options ...GetOption) (*{{ .StructName }}, error)
 	Insert(ctx context.Context, subject *{{ .StructName }}) error
 	Update(ctx context.Context, subject *{{ .StructName }}) error
 	ForceUpdate(ctx context.Context, subject *{{ .StructName }}) error
-	Delete(ctx context.Context, subject *{{ .StructName }}, options... DeleteOption) error
-	DeleteBy{{ FuncNameByValue }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options... DeleteOption) error
+	Delete(ctx context.Context, subject *{{ .StructName }}, options ...DeleteOption) error
+	DeleteBy{{ FuncNameByValue }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options ...DeleteOption) error
 	// Multiple
-	GetMulti(ctx context.Context, {{ RangeKeyArgCheckPairs }}, options... GetOption) ([]*{{ .StructName }}, error)
+	GetMulti(ctx context.Context, {{ RangeKeyArgCheckPairs }}, options ...GetOption) ([]*{{ .StructName }}, error)
 	InsertMulti(ctx context.Context, subjects []*{{ .StructName }}) error
 	UpdateMulti(ctx context.Context, subjects []*{{ .StructName }}) error
-	DeleteMulti(ctx context.Context, subjects []*{{ .StructName }}, options... DeleteOption) error
-	DeleteMultiBy{{ PluralForm FuncNameByValue }}(ctx context.Context, {{ RangeKeyArgCheckPairs }}, options... DeleteOption) error
+	DeleteMulti(ctx context.Context, subjects []*{{ .StructName }}, options ...DeleteOption) error
+	DeleteMultiBy{{ PluralForm FuncNameByValue }}(ctx context.Context, {{ RangeKeyArgCheckPairs }}, options ...DeleteOption) error
 	// Query
 	List(name string, value interface{}) *dynamo.Query
 	Scan() *dynamo.Scan
 	// Transaction
 	RunInTransaction(ctx context.Context, fn func(tx *dynamo.WriteTx) error) error
-	GetWithTx(tx *dynamo.GetTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options... GetOption) (*{{ .StructName }}, error)
+	GetWithTx(tx *dynamo.GetTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options ...GetOption) (*{{ .StructName }}, error)
 	InsertWithTx(ctx context.Context, tx *dynamo.WriteTx, subject *{{ .StructName }}) error
 	UpdateWithTx(ctx context.Context, tx *dynamo.WriteTx, subject *{{ .StructName }}) error
 	ForceUpdateWithTx(ctx context.Context, tx *dynamo.WriteTx, subject *{{ .StructName }}) error
-	DeleteWithTx(ctx context.Context, tx *dynamo.WriteTx, subject *{{ .StructName }}, options... DeleteOption) error
-	DeleteBy{{ FuncNameByValue }}WithTx(ctx context.Context, tx *dynamo.WriteTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options... DeleteOption) error
+	DeleteWithTx(ctx context.Context, tx *dynamo.WriteTx, subject *{{ .StructName }}, options ...DeleteOption) error
+	DeleteBy{{ FuncNameByValue }}WithTx(ctx context.Context, tx *dynamo.WriteTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options ...DeleteOption) error
 	// misc
 	GetTable() dynamo.Table
 	GetTableName() string
@@ -58,7 +58,7 @@ type {{ .RepositoryInterfaceName }} interface {
 type {{ $middlewareName }} interface {
 	BeforeInsert(ctx context.Context, subject *{{ .StructName }}) (bool, error)
 	BeforeUpdate(ctx context.Context, subject *{{ .StructName }}) (bool, error)
-	BeforeDelete(ctx context.Context, subject *{{ .StructName }}, options... DeleteOption) (bool, error)
+	BeforeDelete(ctx context.Context, subject *{{ .StructName }}, options ...DeleteOption) (bool, error)
 }
 
 type {{ .RepositoryStructName }} struct {
@@ -96,7 +96,7 @@ func Create{{ .StructName }}DepsTable(ctx context.Context, db *dynamo.DB) error 
 }
 {{ end }}
 // New{{ .RepositoryInterfaceName }} constructor
-func New{{ .RepositoryInterfaceName }}(db *dynamo.DB, middleware... {{ $middlewareName }}) {{ .RepositoryInterfaceName }} {
+func New{{ .RepositoryInterfaceName }}(db *dynamo.DB, middleware ...{{ $middlewareName }}) {{ .RepositoryInterfaceName }} {
 	return &{{ .RepositoryStructName }}{
 		db:         db,
 		table:      db.Table("{{ .TableName }}"),
@@ -166,7 +166,7 @@ func (repo *lockRepository) validateUnique(ctx context.Context, subject *{{ .Str
 }
 {{ end }}
 // Get 処理中の {{ .StructName }} の取得処理一切の責任を持ち、これを行う
-func (repo *{{ .RepositoryStructName }}) Get(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options... GetOption) (*{{ .StructName }}, error) {
+func (repo *{{ .RepositoryStructName }}) Get(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options ...GetOption) (*{{ .StructName }}, error) {
 	subject := new({{ .StructName }})
 
 	q := repo.table.Get("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", dynamo.Equal, {{ .RangeKeyValueName }}){{ end }}
@@ -184,7 +184,7 @@ func (repo *{{ .RepositoryStructName }}) Get(ctx context.Context, {{ .HashKeyVal
 }
 
 // GetWithTx トランザクション中の {{ .StructName }} の取得処理を行う
-func (repo *{{ .RepositoryStructName }}) GetWithTx(tx *dynamo.GetTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options... GetOption) (*{{ .StructName }}, error) {
+func (repo *{{ .RepositoryStructName }}) GetWithTx(tx *dynamo.GetTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options ...GetOption) (*{{ .StructName }}, error) {
 	subject := new({{ .StructName }})
 
 	query := repo.table.Get("{{ .HashKeyFieldTagName }}", {{ .HashKeyValueName }}){{ if ne .RangeKeyFieldName "" }}.Range("{{ .RangeKeyFieldTagName }}", dynamo.Equal, {{ .RangeKeyValueName }}){{ end }}
@@ -473,7 +473,7 @@ func (repo *{{ .RepositoryStructName }}) ForceUpdateWithTx(ctx context.Context, 
 }
 
 // Delete 処理中の {{ .StructName }} の削除処理一切の責任を持ち、これを行う
-func (repo *{{ .RepositoryStructName }}) Delete(ctx context.Context, subject *{{ .StructName }}, options... DeleteOption) error {
+func (repo *{{ .RepositoryStructName }}) Delete(ctx context.Context, subject *{{ .StructName }}, options ...DeleteOption) error {
 	for _, m := range repo.middleware {
 		c, err := m.BeforeDelete(ctx, subject, options...)
 		if err != nil {
@@ -503,7 +503,7 @@ func (repo *{{ .RepositoryStructName }}) Delete(ctx context.Context, subject *{{
 }
 
 // DeleteBy{{ .HashKeyFieldName }} 処理中の {{ .StructName }} の{{ .HashKeyFieldName }}から削除処理一切の責任を持ち、これを行う
-func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options... DeleteOption) error {
+func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}(ctx context.Context, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options ...DeleteOption) error {
     subject, err := repo.Get(ctx, {{ .HashKeyValueName }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }}{{ end }})
     if err != nil {
         return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}.Get error: %w", err)
@@ -537,7 +537,7 @@ func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}(ctx conte
 }
 
 // DeleteWithTx トランザクション中の {{ .StructName }} の削除処理を行う
-func (repo *{{ .RepositoryStructName }}) DeleteWithTx(ctx context.Context, tx *dynamo.WriteTx, subject *{{ .StructName }}, options... DeleteOption) error {
+func (repo *{{ .RepositoryStructName }}) DeleteWithTx(ctx context.Context, tx *dynamo.WriteTx, subject *{{ .StructName }}, options ...DeleteOption) error {
 	for _, m := range repo.middleware {
 		c, err := m.BeforeDelete(ctx, subject, options...)
 		if err != nil {
@@ -569,7 +569,7 @@ func (repo *{{ .RepositoryStructName }}) DeleteWithTx(ctx context.Context, tx *d
 }
 
 // DeleteBy{{ .HashKeyFieldName }}WithTx トランザクション中の {{ .StructName }} の{{ .HashKeyFieldName }}から削除処理を行う
-func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}WithTx(ctx context.Context, tx *dynamo.WriteTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options... DeleteOption) error {
+func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}WithTx(ctx context.Context, tx *dynamo.WriteTx, {{ .HashKeyValueName }} {{ .HashKeyFieldType }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }} {{ .RangeKeyFieldType }}{{ end }}, options ...DeleteOption) error {
     subject, err := repo.Get(ctx, {{ .HashKeyValueName }}{{ if ne .RangeKeyFieldName "" }}, {{ .RangeKeyValueName }}{{ end }})
     if err != nil {
         return xerrors.Errorf("DeleteBy{{ FuncNameByValue }}WithTx.Get error: %w", err)
@@ -606,7 +606,7 @@ func (repo *{{ .RepositoryStructName }}) DeleteBy{{ FuncNameByValue }}WithTx(ctx
 }
 
 // GetMulti 処理中の {{ .StructName }} の一括取得処理一切の責任を持ち、これを行う
-func (repo *{{ .RepositoryStructName }}) GetMulti(ctx context.Context, {{ RangeKeyArgCheckPairs }}, options... GetOption) (subjects []*{{ .StructName }}, err error) {
+func (repo *{{ .RepositoryStructName }}) GetMulti(ctx context.Context, {{ RangeKeyArgCheckPairs }}, options ...GetOption) (subjects []*{{ .StructName }}, err error) {
 	for {{ RangeKeyForTerms }} {
 		subject, err := repo.Get(ctx, {{ if ne .RangeKeyFieldName "" }}key, value{{ else }}{{ .HashKeyFieldTagName }}{{ end }}, options...)
 		if err != nil {
@@ -641,7 +641,7 @@ func (repo *{{ .RepositoryStructName }}) UpdateMulti(ctx context.Context, subjec
 }
 
 // DeleteMulti 処理中の {{ .StructName }} の一括削除処理一切の責任を持ち、これを行う
-func (repo *{{ .RepositoryStructName }}) DeleteMulti(ctx context.Context, subjects []*{{ .StructName }}, options... DeleteOption) error {
+func (repo *{{ .RepositoryStructName }}) DeleteMulti(ctx context.Context, subjects []*{{ .StructName }}, options ...DeleteOption) error {
 	tx := repo.db.WriteTx()
 	for _, subject := range subjects {
 		err := repo.DeleteWithTx(ctx, tx, subject, options...)
@@ -653,10 +653,10 @@ func (repo *{{ .RepositoryStructName }}) DeleteMulti(ctx context.Context, subjec
 }
 
 // DeleteMultiBy{{ PluralForm FuncNameByValue }} 処理中の {{ .StructName }} の{{ .HashKeyFieldName }}群を元に一括削除処理一切の責任を持ち、これを行う
-func (repo *{{ .RepositoryStructName }}) DeleteMultiBy{{ PluralForm FuncNameByValue }}(ctx context.Context, {{ RangeKeyArgCheckPairs }}, options... DeleteOption) error {
+func (repo *{{ .RepositoryStructName }}) DeleteMultiBy{{ PluralForm FuncNameByValue }}(ctx context.Context, {{ RangeKeyArgCheckPairs }}, options ...DeleteOption) error {
 	tx := repo.db.WriteTx()
 	for {{ RangeKeyForTerms }} {
-		err := repo.DeleteBy{{ FuncNameByValue }}WithTx(ctx , tx, {{ if ne .RangeKeyFieldName "" }}key, value{{ else }}{{ .HashKeyFieldTagName }}{{ end }}, options...)
+		err := repo.DeleteBy{{ FuncNameByValue }}WithTx(ctx, tx, {{ if ne .RangeKeyFieldName "" }}key, value{{ else }}{{ .HashKeyFieldTagName }}{{ end }}, options...)
 		if err != nil {
 			return xerrors.Errorf("DeleteMultiBy{{ PluralForm FuncNameByValue }}.DeleteBy{{ FuncNameByValue }}WithTx error: %w", err)
 		}
