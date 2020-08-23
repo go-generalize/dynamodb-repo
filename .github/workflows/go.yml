@@ -17,7 +17,7 @@ jobs:
     steps:
       - name: Set up AWS CLI
         run: |
-          sudo apt-get install -y awscli
+          sudo apt install -y awscli
 
       - name: Set up Go 1.12
         uses: actions/setup-go@v1
@@ -26,6 +26,12 @@ jobs:
         id: go
 
       - uses: actions/checkout@v2
+
+      - name: Make statik
+        run: |
+          PATH="$PATH":"$HOME"/go/bin
+          go get github.com/rakyll/statik
+          make statik
 
       - name: Run tests
         run: |
