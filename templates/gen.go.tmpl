@@ -62,11 +62,33 @@ type {{ $middlewareName }} interface {
 	BeforeDelete(ctx context.Context, subject *{{ .StructName }}, options... DeleteOption) (bool, error)
 }
 
+{{- $validationLayerName := printf "%sMiddleware" .RepositoryInterfaceName }}
+// {{ .RepositoryStructName }}ValidationLayer バリデーションを行う Middleware
+type {{ .RepositoryStructName }}ValidationLayer struct {
+	validator  *validator.Validate
+}
+func (layer *{{ .RepositoryStructName }}ValidationLayer) BeforeInsert(ctx context.Context, subject *{{ .StructName }}) (bool, error) {
+	err := layer.validator.Struct(subject)
+	return false, err
+}
+func (layer *{{ .RepositoryStructName }}ValidationLayer) BeforeUpdate(ctx context.Context, subject *{{ .StructName }}) (bool, error) {
+	err := layer.validator.Struct(subject)
+	return false, err
+}
+func (layer *{{ .RepositoryStructName }}ValidationLayer) BeforeDelete(ctx context.Context, subject *{{ .StructName }}, options ...DeleteOption) (bool, error) {
+	return false, nil
+}
+
+func New{{ RepositoryStructName }}RepositoryValidationLayer() {{ $middlewareName }} {
+	return &{{ .RepositoryStructName }}ValidationLayer {
+		validator:  validator.New(),
+	}
+}
+
 type {{ .RepositoryStructName }} struct {
 	db         *dynamo.DB
 	table      dynamo.Table
 	middleware []{{ $middlewareName }}
-	validator  *validator.Validate
 }
 {{ if .UniqueFields }}
 {{- range $uniqueField := .UniqueFields }}
@@ -103,7 +125,6 @@ func New{{ .RepositoryInterfaceName }}(db *dynamo.DB, middleware... {{ $middlewa
 		db:         db,
 		table:      db.Table("{{ .TableName }}"),
 		middleware: middleware,
-		validator:  validator.New(),
 	}
 }
 
@@ -150,37 +171,6 @@ func (repo *{{ .RepositoryStructName }}) List(name string, value interface{}) *d
 // パフォーマンスやコストの観点から可能な限りListを使用する方が望ましい
 func (repo *{{ .RepositoryStructName }}) Scan() *dynamo.Scan {
 	return repo.table.Scan()
-}
-
-// validateStruct validate フィールドによって値を検査する
-func (repo *{{ .RepositoryStructName }}) validateStruct(subject *{{ .StructName }}) error {
-	err := repo.validator.Struct(subject)
-	if err != nil {
-
-		// this check is only needed when your code could produce
-		// an invalid value for validation such as interface with nil
-		// value most including myself do not usually have code like this.
-		if _, ok := err.(*validator.InvalidValidationError); ok {
-			// fmt.Println(err)
-			_ = err  // Debug
-		}
-
-		for _, err := range err.(validator.ValidationErrors) {
-			_ = err  // Debug
-			//fmt.Println(err.Namespace())
-			//fmt.Println(err.Field())
-			//fmt.Println(err.StructNamespace())
-			//fmt.Println(err.StructField())
-			//fmt.Println(err.Tag())
-			//fmt.Println(err.ActualTag())
-			//fmt.Println(err.Kind())
-			//fmt.Println(err.Type())
-			//fmt.Println(err.Value())
-			//fmt.Println(err.Param())
-			//fmt.Println()
-		}
-	}
-	return err
 }
 
 {{ if .UniqueFields }}
@@ -293,9 +283,6 @@ func (repo *{{ .RepositoryStructName }}) Insert(ctx context.Context, subject *{{
 		return xerrors.New("{{ .HashKeyFieldName }} is required")
 	}
 {{- end }}
-	if err := repo.validateStruct(subject); err != nil {
-		return xerrors.Errorf("Insert.validateStruct error: %w", err)
-	}
 {{- if $uniqueField := .UniqueFields }}
     if err := repo.validateUnique(ctx, subject); err != nil {
         return xerrors.Errorf("Insert.validateUnique error: %w", err)
