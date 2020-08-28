@@ -25,7 +25,8 @@ type Nest1Type struct {
 }
 type Lock struct {
 	ID    int64  `dynamo:"id,hash"`
-	Name  string `dynamo:"name,unique"`
+	Name  string `dynamo:"name,unique"   validate:"required"`
 	Name2 string `dynamo:"name2,unique"`
+	Email string `dynamo:"email"         validate:"required,email"`
 	Meta  Nest1Type
 }

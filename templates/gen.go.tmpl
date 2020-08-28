@@ -16,6 +16,7 @@ import (
 {{- if eq .AutoGeneration true }}
 	"github.com/google/uuid"
 {{- end }}
+	"github.com/go-playground/validator"
 	"github.com/guregu/dynamo"
 	"golang.org/x/xerrors"
 )
@@ -65,6 +66,7 @@ type {{ .RepositoryStructName }} struct {
 	db         *dynamo.DB
 	table      dynamo.Table
 	middleware []{{ $middlewareName }}
+	validator  *validator.Validate
 }
 {{ if .UniqueFields }}
 {{- range $uniqueField := .UniqueFields }}
@@ -101,6 +103,7 @@ func New{{ .RepositoryInterfaceName }}(db *dynamo.DB, middleware... {{ $middlewa
 		db:         db,
 		table:      db.Table("{{ .TableName }}"),
 		middleware: middleware,
+		validator:  validator.New(),
 	}
 }
 
@@ -112,6 +115,37 @@ func (repo *{{ .RepositoryStructName }}) GetTable() dynamo.Table {
 // GetTableName TableName getter
 func (repo *{{ .RepositoryStructName }}) GetTableName() string {
 	return repo.table.Name()
+}
+
+// validate フィールドによって値を検査する
+func (repo *lockRepository) validate(val interface{}) error {
+	err := repo.validate.Struct(val)
+	if err != nil {
+
+		// this check is only needed when your code could produce
+		// an invalid value for validation such as interface with nil
+		// value most including myself do not usually have code like this.
+		if _, ok := err.(*validator.InvalidValidationError); ok {
+			// fmt.Println(err)
+			_ = err  // Debug
+		}
+
+		for _, err := range err.(validator.ValidationErrors) {
+			_ = err  // Debug
+			//fmt.Println(err.Namespace())
+			//fmt.Println(err.Field())
+			//fmt.Println(err.StructNamespace())
+			//fmt.Println(err.StructField())
+			//fmt.Println(err.Tag())
+			//fmt.Println(err.ActualTag())
+			//fmt.Println(err.Kind())
+			//fmt.Println(err.Type())
+			//fmt.Println(err.Value())
+			//fmt.Println(err.Param())
+			//fmt.Println()
+		}
+	}
+	return err
 }
 
 // HasArg HasKeyのペアを返す
