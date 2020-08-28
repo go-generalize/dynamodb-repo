@@ -505,7 +505,7 @@ func TestDynamoDBWithMeta(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	model.CreateLockDepsTable(ctx, client)
-	lockRepo := model.NewLockRepository(client)
+	lockRepo := model.NewLockRepository(client, NewLockRepositoryValidationLayer())
 
 	t.Run("get_softDeletedItem", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
