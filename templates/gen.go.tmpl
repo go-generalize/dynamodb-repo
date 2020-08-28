@@ -473,6 +473,7 @@ func (repo *{{ .RepositoryStructName }}) ForceUpdateWithTx(ctx context.Context, 
 }
 
 // Delete 処理中の {{ .StructName }} の削除処理一切の責任を持ち、これを行う
+// Deprecated: 代わりに DeleteBy{{ .HashKeyFieldName }} を使うことを推奨
 func (repo *{{ .RepositoryStructName }}) Delete(ctx context.Context, subject *{{ .StructName }}, options... DeleteOption) error {
 	for _, m := range repo.middleware {
 		c, err := m.BeforeDelete(ctx, subject, options...)
