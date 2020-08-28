@@ -79,7 +79,7 @@ func (layer *{{ .RepositoryStructName }}ValidationLayer) BeforeDelete(ctx contex
 	return false, nil
 }
 
-func New{{ RepositoryStructName }}RepositoryValidationLayer() {{ $middlewareName }} {
+func New{{ .StructName }}RepositoryValidationLayer() {{ $middlewareName }} {
 	return &{{ .RepositoryStructName }}ValidationLayer {
 		validator:  validator.New(),
 	}
