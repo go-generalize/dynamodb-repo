@@ -117,37 +117,6 @@ func (repo *{{ .RepositoryStructName }}) GetTableName() string {
 	return repo.table.Name()
 }
 
-// validate フィールドによって値を検査する
-func (repo *lockRepository) validate(val interface{}) error {
-	err := repo.validator.Struct(val)
-	if err != nil {
-
-		// this check is only needed when your code could produce
-		// an invalid value for validation such as interface with nil
-		// value most including myself do not usually have code like this.
-		if _, ok := err.(*validator.InvalidValidationError); ok {
-			// fmt.Println(err)
-			_ = err  // Debug
-		}
-
-		for _, err := range err.(validator.ValidationErrors) {
-			_ = err  // Debug
-			//fmt.Println(err.Namespace())
-			//fmt.Println(err.Field())
-			//fmt.Println(err.StructNamespace())
-			//fmt.Println(err.StructField())
-			//fmt.Println(err.Tag())
-			//fmt.Println(err.ActualTag())
-			//fmt.Println(err.Kind())
-			//fmt.Println(err.Type())
-			//fmt.Println(err.Value())
-			//fmt.Println(err.Param())
-			//fmt.Println()
-		}
-	}
-	return err
-}
-
 // HasArg HasKeyのペアを返す
 func (repo *{{ .RepositoryStructName }}) hashPair(subject *{{ .StructName }}) (string, interface{}) {
 	return "{{ .HashKeyFieldTagName }}", subject.{{ .HashKeyFieldName }}
@@ -182,6 +151,38 @@ func (repo *{{ .RepositoryStructName }}) List(name string, value interface{}) *d
 func (repo *{{ .RepositoryStructName }}) Scan() *dynamo.Scan {
 	return repo.table.Scan()
 }
+
+// validateStruct validate フィールドによって値を検査する
+func (repo *{{ .RepositoryStructName }}) validateStruct(subject *{{ .StructName }}) error {
+	err := repo.validator.Struct(subject)
+	if err != nil {
+
+		// this check is only needed when your code could produce
+		// an invalid value for validation such as interface with nil
+		// value most including myself do not usually have code like this.
+		if _, ok := err.(*validator.InvalidValidationError); ok {
+			// fmt.Println(err)
+			_ = err  // Debug
+		}
+
+		for _, err := range err.(validator.ValidationErrors) {
+			_ = err  // Debug
+			//fmt.Println(err.Namespace())
+			//fmt.Println(err.Field())
+			//fmt.Println(err.StructNamespace())
+			//fmt.Println(err.StructField())
+			//fmt.Println(err.Tag())
+			//fmt.Println(err.ActualTag())
+			//fmt.Println(err.Kind())
+			//fmt.Println(err.Type())
+			//fmt.Println(err.Value())
+			//fmt.Println(err.Param())
+			//fmt.Println()
+		}
+	}
+	return err
+}
+
 {{ if .UniqueFields }}
 // validateUnique unique check
 func (repo *lockRepository) validateUnique(ctx context.Context, subject *{{ .StructName }}) error {
@@ -292,6 +293,9 @@ func (repo *{{ .RepositoryStructName }}) Insert(ctx context.Context, subject *{{
 		return xerrors.New("{{ .HashKeyFieldName }} is required")
 	}
 {{- end }}
+	if err := repo.validateStruct(subject); err != nil {
+		return xerrors.Errorf("Insert.validateStruct error: %w", err)
+	}
 {{- if $uniqueField := .UniqueFields }}
     if err := repo.validateUnique(ctx, subject); err != nil {
         return xerrors.Errorf("Insert.validateUnique error: %w", err)
