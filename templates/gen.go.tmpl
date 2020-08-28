@@ -119,7 +119,7 @@ func (repo *{{ .RepositoryStructName }}) GetTableName() string {
 
 // validate フィールドによって値を検査する
 func (repo *lockRepository) validate(val interface{}) error {
-	err := repo.validate.Struct(val)
+	err := repo.validator.Struct(val)
 	if err != nil {
 
 		// this check is only needed when your code could produce
