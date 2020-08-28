@@ -7,6 +7,7 @@ require (
 	github.com/fatih/structtag v1.2.0
 	github.com/go-playground/universal-translator v0.17.0 // indirect
 	github.com/go-playground/validator v9.31.0+incompatible
+	github.com/go-playground/validator/v10 v10.3.0 // indirect
 	github.com/go-utils/meta v0.0.0-20200806045939-90d0bfa8bb9b
 	github.com/go-utils/plural v0.0.1
 	github.com/golang/mock v1.4.4
