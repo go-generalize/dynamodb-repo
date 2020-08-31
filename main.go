@@ -145,10 +145,16 @@ func generate(gen *generator, fs *token.FileSet, structType *ast.StructType) err
 
 		switch name {
 		case CreatedAt, CreateTime:
+			if gen.EnableCreateTime == true {
+				return xerrors.New(fmt.Sprintf("duplicated %s or %s", CreatedAt, CreateTime))
+			}
 			gen.EnableCreateTime = true
 			gen.CreateTimeName = name
 			gen.CreateTimeType = typeName
 		case UpdatedAt, UpdateTime:
+			if gen.EnableUpdateTime == true {
+				return xerrors.New(fmt.Sprintf("duplicated %s or %s", UpdatedAt, UpdateTime))
+			}
 			gen.EnableUpdateTime = true
 			gen.UpdateTimeName = name
 			gen.UpdateTimeDynamoTag = name
